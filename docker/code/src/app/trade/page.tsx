@@ -38,7 +38,7 @@ const TradePage: React.FC = () => {
   const [addressAliases, setAddressAliases] = useState<AddressEntry[]>([]);
   
   const [fromAddress, setFromAddress] = useState('');
-  const [customTokens, setCustomTokens] = useState<Array<{ symbol: string; address: string }>>([]);
+  const [customTokens, setCustomTokens] = useState<Array<{ symbol: string; address: string; decimals?: number }>>([]);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
   
@@ -65,7 +65,10 @@ const TradePage: React.FC = () => {
   // 过滤代币根据搜索关键字
   const filteredTokens = [
     { symbol: 'BNB', address: null },
-    ...customTokens,
+    ...customTokens.map(token => ({
+      symbol: token.symbol,
+      address: token.address,
+    })),
   ].filter((token) =>
     token.symbol.toLowerCase().includes(tokenSearchKeyword.toLowerCase())
   );
@@ -85,7 +88,8 @@ const TradePage: React.FC = () => {
         if (data.success) {
           setCustomTokens(data.data.map((t: any) => ({
             symbol: t.symbol,
-            address: t.address,
+            address: t.contract_address || t.address,
+            decimals: t.decimals || 18,
           })));
         }
       } catch (err) {
@@ -183,7 +187,24 @@ const TradePage: React.FC = () => {
   };
 
   const getSelectedTokenBalance = (): TokenBalance | undefined => {
-    return tokenBalances.find((t) => t.symbol === selectedToken);
+    // 首先从 tokenBalances 中查找（API 返回的已知代币）
+    const found = tokenBalances.find((t) => t.symbol === selectedToken);
+    if (found) return found;
+    
+    // 如果是自定义代币，构造一个虚拟的 TokenBalance 对象
+    const customToken = customTokens.find((t) => t.symbol === selectedToken);
+    if (customToken) {
+      return {
+        symbol: customToken.symbol,
+        name: customToken.symbol,
+        balance: '0',
+        formatted: '0',
+        decimals: customToken.decimals || 18,
+        contractAddress: customToken.address,
+      };
+    }
+    
+    return undefined;
   };
 
   const getReceivingAddressOptions = () => {
@@ -223,20 +244,33 @@ const TradePage: React.FC = () => {
       return;
     }
 
-    const selectedTokenBalance = getSelectedTokenBalance();
-    if (!selectedTokenBalance) {
-      setError('代币余额信息丢失');
-      return;
-    }
-
     if (parseFloat(amount) <= 0) {
       setError('转账数量必须大于0');
       return;
     }
 
-    if (parseFloat(amount) > parseFloat(selectedTokenBalance.formatted || '0')) {
-      setError(`余额不足。可用余额: ${selectedTokenBalance.formatted} ${selectedToken}`);
+    const selectedTokenBalance = getSelectedTokenBalance();
+    if (!selectedTokenBalance) {
+      setError(`无法识别代币: ${selectedToken}`);
       return;
+    }
+
+    // 对于 BNB，检查余额
+    if (selectedToken === 'BNB') {
+      if (parseFloat(selectedTokenBalance.formatted || '0') <= 0) {
+        setError('BNB余额不足');
+        return;
+      }
+      if (parseFloat(amount) > parseFloat(selectedTokenBalance.formatted || '0')) {
+        setError(`BNB余额不足。可用余额: ${selectedTokenBalance.formatted} BNB`);
+        return;
+      }
+    }
+    // 对于自定义代币，跳过余额检查（因为无法从 API 获取准确的自定义代币余额）
+    // 但仍然尝试执行转账，失败时由后端返回错误
+    else {
+      // 自定义代币只做基本验证
+      console.log(`准备转账自定义代币: ${selectedToken} (${selectedTokenBalance.contractAddress})`);
     }
 
     try {
@@ -252,7 +286,7 @@ const TradePage: React.FC = () => {
           fromAddress,
           toAddress,
           amount,
-          tokenAddress: selectedTokenBalance.contractAddress,
+          tokenAddress: selectedTokenBalance?.contractAddress || null,
         }),
       });
 
@@ -449,6 +483,7 @@ const TradePage: React.FC = () => {
                       ) : (
                         filteredTokens.map((token) => {
                           const balance = tokenBalances.find((t) => t.symbol === token.symbol);
+                          const isCustomToken = token.symbol !== 'BNB' && !['USDT', 'USDC', 'BUSD'].includes(token.symbol);
                           return (
                             <button
                               key={token.symbol}
@@ -458,9 +493,14 @@ const TradePage: React.FC = () => {
                               }`}
                             >
                               <div className="flex items-center justify-between">
-                                <span className="font-semibold text-gray-900">{token.symbol}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-gray-900">{token.symbol}</span>
+                                  {isCustomToken && (
+                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">自定义</span>
+                                  )}
+                                </div>
                                 <span className="text-sm text-gray-600">
-                                  {balance ? `余额: ${balance.formatted}` : '余额: 0'}
+                                  {balance ? `余额: ${balance.formatted}` : isCustomToken ? '自定义代币' : '余额: 0'}
                                 </span>
                               </div>
                             </button>

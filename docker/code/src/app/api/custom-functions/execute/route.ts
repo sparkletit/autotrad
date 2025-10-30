@@ -1,6 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 
+// 辅助函数：将对象中的 BigInt 转换为字符串
+function convertBigIntToString(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  if (typeof obj === 'bigint') {
+    return obj.toString();
+  }
+  if (typeof obj === 'object') {
+    if (Array.isArray(obj)) {
+      return obj.map(item => convertBigIntToString(item));
+    }
+    const result: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        result[key] = convertBigIntToString(obj[key]);
+      }
+    }
+    return result;
+  }
+  return obj;
+}
+
 // POST - 执行自定义函数
 export async function POST(request: NextRequest) {
   try {
@@ -72,18 +95,58 @@ export async function POST(request: NextRequest) {
 
     // 执行合约函数
     const tx = await contract[function_name](...paramsArray, txOptions);
-    const receipt = await tx.wait();
+    
+    // 等待交易完成并获取交易回执
+    // 检查tx是否是一个交易对象（有wait方法）
+    let receipt;
+    if (tx && typeof tx.wait === 'function') {
+      // 这是一个交易对象，需要等待
+      receipt = await tx.wait();
+    } else if (tx && typeof tx === 'object' && tx.hash) {
+      // 这是一个交易哈希对象
+      receipt = tx;
+    } else {
+      // 这可能是一个只读函数的返回值，或者交易直接返回结果
+      console.log('函数返回值:', tx);
+      const safeResult = convertBigIntToString(tx);
+      return NextResponse.json({
+        success: true,
+        message: '函数执行成功',
+        result: safeResult,
+      });
+    }
+
+    if (!receipt) {
+      throw new Error('无法获取交易回执');
+    }
+
+    // 检查交易是否成功（只针对状态修改函数）
+    // receipt.status: 0x1 或 1 表示成功，0x0 或 0 表示失败
+    if (receipt.status !== undefined) {
+      const status = typeof receipt.status === 'string' ? parseInt(receipt.status, 16) : receipt.status;
+      if (status === 0) {
+        throw new Error('交易执行失败：合约调用被 revert');
+      }
+    }
 
     // 停止模拟账户
     await provider.send('anvil_stopImpersonatingAccount', [account_address]);
 
-    return NextResponse.json({
+    // 构造响应
+    const response: any = {
       success: true,
       message: '函数执行成功',
-      txHash: receipt.hash,
-      blockNumber: receipt.blockNumber,
-      gasUsed: receipt.gasUsed.toString(),
-    });
+      txHash: receipt.hash || tx.hash,
+      blockNumber: receipt.blockNumber?.toString() || '0',
+      gasUsed: receipt.gasUsed?.toString() || '0',
+    };
+
+    // 尝试获取返回值（尽管是无返回值函数）
+    // 对于有返回值的函数，我们已经成功获取了（在else分支返回）
+    // 对于无返回值函数，设置result为”0x”(空布新)，表示执行成功但无返回值
+    response.result = '0x'; // 无返回值
+
+    return NextResponse.json(response);
   } catch (error: any) {
     console.error('执行自定义函数失败:', error);
     return NextResponse.json(

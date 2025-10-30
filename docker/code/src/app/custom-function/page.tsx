@@ -53,6 +53,7 @@ const CustomFunctionPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [txHash, setTxHash] = useState('');
+  const [result, setResult] = useState<any>(null);
 
   const [templates, setTemplates] = useState<FunctionTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -165,6 +166,7 @@ const CustomFunctionPage: React.FC = () => {
 
       setSuccess('函数执行成功！');
       setTxHash(executeData.txHash);
+      setResult(executeData.result);
 
       // 保存到数据库
       const saveResponse = await fetch('/api/custom-functions', {
@@ -442,7 +444,7 @@ const CustomFunctionPage: React.FC = () => {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         参数JSON预览
                       </label>
-                      <pre className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-xs font-mono overflow-x-auto">
+                      <pre className="w-full px-4 py-2 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg text-xs font-mono overflow-x-auto">
                         {JSON.stringify(functionParams, null, 2)}
                       </pre>
                     </div>
@@ -462,8 +464,66 @@ const CustomFunctionPage: React.FC = () => {
               </div>
             </div>
 
-            {/* 右侧：历史模板 */}
+            {/* 右侧：执行结果区域 */}
             <div className="space-y-6">
+              {/* 交易结果扮示 */}
+              {(result !== null || txHash) && (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">执行结果</h3>
+                  <div className="space-y-3">
+                    {/* 交易哈希 */}
+                    {txHash && (
+                      <div>
+                        <p className="text-xs text-gray-600 mb-2 font-semibold">交易哈希：</p>
+                        <div className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono overflow-x-auto text-gray-800 break-all">
+                          {txHash}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 返回值 */}
+                    {result !== null && result !== undefined ? (
+                      <div>
+                        <p className="text-xs text-gray-600 mb-2 font-semibold">返回值类型：</p>
+                        <p className="text-sm text-gray-900">
+                          {typeof result === 'object' ? 'Object' : typeof result}
+                        </p>
+                        <p className="text-xs text-gray-600 mb-2 font-semibold mt-3">返回值内容：</p>
+                        <pre className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono overflow-x-auto text-gray-800">
+                          {typeof result === 'string' 
+                            ? result 
+                            : JSON.stringify(result, null, 2)}
+                        </pre>
+                        {/* 特殊处理空返回值的情形 */}
+                        {result === '0x' && (
+                          <p className="text-xs text-gray-500 mt-2 italic">
+                            表示此函数为无返回值函数（空字节，0x）
+                          </p>
+                        )}
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              typeof result === 'string' 
+                                ? result 
+                                : JSON.stringify(result, null, 2)
+                            );
+                          }}
+                          className="w-full px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 text-xs rounded transition-colors mt-2"
+                        >
+                          复制返回值
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs text-blue-800">
+                          ✓ 无返回值的函数（状态修改函数）
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">历史模板</h3>
 
