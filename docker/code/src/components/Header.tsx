@@ -17,17 +17,20 @@ const Header: React.FC<HeaderProps> = ({ title = "Web3 交易平台" }) => {
             <a href="/trade" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
               交易
             </a>
+            <a href="/swap" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
+              交换
+            </a>
             <a href="/balance-checker" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
               余额查询
+            </a>
+            <a href="/custom-function" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
+              自定义函数
             </a>
             <a href="/address-books" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
               地址本
             </a>
             <a href="/settings" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
               设置
-            </a>
-            <a href="#" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
-              投资组合
             </a>
           </nav>
         </div>
