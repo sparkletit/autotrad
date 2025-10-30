@@ -1,0 +1,95 @@
+import { NextRequest, NextResponse } from 'next/server';
+import mysql from 'mysql2/promise';
+
+const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST || 'mysql',
+  user: process.env.MYSQL_USER || 'root',
+  password: process.env.MYSQL_PASSWORD || 'webdev123',
+  database: process.env.MYSQL_DATABASE || 'web3_trad',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
+
+/**
+ * GET /api/custom-tokens
+ * 获取所有自定义代币
+ */
+export async function GET() {
+  try {
+    const connection = await pool.getConnection();
+    const [rows] = await connection.query(
+      'SELECT id, symbol, contract_address as address, decimals FROM custom_tokens WHERE is_active = true ORDER BY created_at ASC'
+    );
+    connection.release();
+
+    return NextResponse.json({
+      success: true,
+      data: rows,
+    });
+  } catch (error) {
+    console.error('获取自定义代币失败:', error);
+    return NextResponse.json(
+      { success: false, error: '获取自定义代币失败' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/custom-tokens
+ * 添加自定义代币
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { symbol, address, decimals } = body;
+
+    if (!symbol || !address || decimals === undefined) {
+      return NextResponse.json(
+        { success: false, error: '缺少必要参数' },
+        { status: 400 }
+      );
+    }
+
+    const connection = await pool.getConnection();
+
+    // 检查是否已存在
+    const [existing] = await connection.query(
+      'SELECT id FROM custom_tokens WHERE contract_address = ? AND is_active = true',
+      [address]
+    );
+
+    if (Array.isArray(existing) && existing.length > 0) {
+      connection.release();
+      return NextResponse.json(
+        { success: false, error: '该代币地址已存在' },
+        { status: 400 }
+      );
+    }
+
+    // 插入新代币
+    const [result] = await connection.query(
+      'INSERT INTO custom_tokens (symbol, contract_address, decimals, network) VALUES (?, ?, ?, ?)',
+      [symbol, address, decimals, 'all']
+    );
+
+    connection.release();
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: (result as any).insertId,
+        symbol,
+        address,
+        decimals,
+      },
+    });
+  } catch (error) {
+    console.error('添加自定义代币失败:', error);
+    return NextResponse.json(
+      { success: false, error: '添加自定义代币失败' },
+      { status: 500 }
+    );
+  }
+}
