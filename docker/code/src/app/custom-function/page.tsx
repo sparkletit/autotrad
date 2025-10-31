@@ -142,6 +142,25 @@ const CustomFunctionPage: React.FC = () => {
         return functionParams[paramName];
       }) || [];
 
+      // 验证所有必需参数都已填入
+      if (func?.inputs && func.inputs.length > 0) {
+        for (let i = 0; i < func.inputs.length; i++) {
+          const paramName = func.inputs[i].name || `param${i}`;
+          if (paramsArray[i] === '' || paramsArray[i] === undefined || paramsArray[i] === null) {
+            setError(`请填写第 ${i + 1} 个参数: ${paramName} (${func.inputs[i].type})`);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      console.log('\n【前端调试信息】');
+      console.log('函数:', selectedFunction);
+      console.log('参数对象:', functionParams);
+      console.log('参数数组:', paramsArray);
+      console.log('账户:', selectedAccount);
+      console.log('合约:', contractAddress);
+
       // 执行函数
       const executeResponse = await fetch('/api/custom-functions/execute', {
         method: 'POST',
@@ -278,8 +297,7 @@ const CustomFunctionPage: React.FC = () => {
                     <option value="">-- 选择账户 --</option>
                     {accounts.map((account) => (
                       <option key={`${account.type}-${account.id}`} value={account.address}>
-                        {account.account_name} ({account.address.slice(0, 6)}...
-                        {account.address.slice(-4)})
+                        {account.account_name} ({account.address})
                       </option>
                     ))}
                   </select>

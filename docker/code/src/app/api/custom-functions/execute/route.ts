@@ -60,17 +60,114 @@ export async function POST(request: NextRequest) {
     // 连接到Fork网络
     const provider = new ethers.JsonRpcProvider('http://host.docker.internal:8545');
     
-    // 模拟账户（在Anvil中）
-    await provider.send('anvil_impersonateAccount', [account_address]);
-    await provider.send('hardhat_setBalance', [account_address, '0x56BC75E2D63100000']); // 100 ETH
-    
     const signer = await provider.getSigner(account_address);
     
     // 创建合约实例
     const contract = new ethers.Contract(contract_address, abiArray, signer);
 
-    // 准备交易参数
-    const paramsArray = Array.isArray(params) ? params : [];
+    // 找到目标函数的ABI
+    const functionAbi = abiArray.find(
+      (item: any) => item.type === 'function' && item.name === function_name
+    );
+
+    // 准备交易参数并进行类型转换
+    let paramsArray = Array.isArray(params) ? params : [];
+    if (functionAbi && functionAbi.inputs) {
+      paramsArray = paramsArray.map((param: any, index: number) => {
+        if (index < functionAbi.inputs.length) {
+          const inputType = functionAbi.inputs[index].type;
+          const convertedValue = convertParamByType(param, inputType);
+          console.log(`参新${index}: ${functionAbi.inputs[index].name}(${inputType}) = ${param} -> ${convertedValue}`);
+          return convertedValue;
+        }
+        return param;
+      });
+    }
+    console.log('转换后的参数数组:', paramsArray);
+    console.log('参数类型:', paramsArray.map((p: any) => typeof p));
+    
+    // ... existing code ...
+
+    // 辅助函数：根据参数类型转换参数值
+    function convertParamByType(value: any, paramType: string): any {
+      if (value === null || value === undefined || value === '') {
+        return value;
+      }
+
+      const typeStr = paramType.trim().toLowerCase();
+
+      // 处理地址类型 - 转小写
+      if (typeStr === 'address') {
+        if (typeof value === 'string') {
+          return value.toLowerCase();
+        }
+        return value;
+      }
+
+      // 处理整数类型 (uint, int, uint8, int256, 等)
+      // 关键：对于小数输入，使用 parseEther 转换，但直接返回 BigInt
+      // ethers.Contract 可以正确处理 BigInt 参数
+      if (typeStr.startsWith('uint') || typeStr.startsWith('int')) {
+        if (typeof value === 'string' || typeof value === 'number') {
+          const strValue = value.toString().trim();
+          // 处理小数：如果是小数，用 parseEther 转换为 Wei
+          if (strValue.includes('.')) {
+            try {
+              const parsed = ethers.parseEther(strValue);
+              return parsed; // 返回 BigInt，ethers.Contract 会正确处理
+            } catch (e) {
+              console.warn(`无法将 ${strValue} 转换为 ether，返回原值`);
+              return strValue;
+            }
+          }
+          // 处理整数：直接返回字符串让 ethers 转换
+          return strValue;
+        }
+        return value;
+      }
+
+      // 处理布尔类型
+      if (typeStr === 'bool') {
+        if (typeof value === 'string') {
+          return value.toLowerCase() === 'true' || value === '1';
+        }
+        return Boolean(value);
+      }
+
+      // 处理字符串类型
+      if (typeStr === 'string') {
+        return value.toString();
+      }
+
+      // 处理字节类型
+      if (typeStr.startsWith('bytes')) {
+        if (typeof value === 'string' && !value.startsWith('0x')) {
+          return '0x' + value;
+        }
+        return value;
+      }
+
+      // 处理数组类型
+      if (typeStr.endsWith('[]')) {
+        if (typeof value === 'string') {
+          try {
+            value = JSON.parse(value);
+          } catch (e) {
+            return value;
+          }
+        }
+        if (Array.isArray(value)) {
+          const baseType = typeStr.slice(0, -2);
+          return value.map(v => convertParamByType(v, baseType));
+        }
+        return value;
+      }
+
+      // 其他类型返回原值
+      return value;
+    }
+
+    // ... existing code ...
     
     // 构建交易选项
     const txOptions: any = {};
@@ -101,7 +198,18 @@ export async function POST(request: NextRequest) {
     let receipt;
     if (tx && typeof tx.wait === 'function') {
       // 这是一个交易对象，需要等待
-      receipt = await tx.wait();
+      // 注意：tx.wait() 在交易失败时会抛出异常，但我们仍然可以从异常中获取交易回执
+      try {
+        receipt = await tx.wait();
+      } catch (waitError: any) {
+        // 交易失败，但我们可以从错误中获取交易回执
+        if (waitError.receipt) {
+          receipt = waitError.receipt;
+          console.log('交易已 revert，从异常中获取交易回执');
+        } else {
+          throw waitError;
+        }
+      }
     } else if (tx && typeof tx === 'object' && tx.hash) {
       // 这是一个交易哈希对象
       receipt = tx;
@@ -128,9 +236,6 @@ export async function POST(request: NextRequest) {
         throw new Error('交易执行失败：合约调用被 revert');
       }
     }
-
-    // 停止模拟账户
-    await provider.send('anvil_stopImpersonatingAccount', [account_address]);
 
     // 构造响应
     const response: any = {

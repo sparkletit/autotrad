@@ -216,7 +216,7 @@ const TradePage: React.FC = () => {
       options.push({
         type: 'account',
         id: account.id,
-        label: `${account.account_name} (${account.address.slice(0, 6)}...${account.address.slice(-4)})`,
+        label: `${account.account_name} (${account.address})`,
         value: account.address,
         uniqueKey: `account-${optionIndex}`,
       });
@@ -228,7 +228,7 @@ const TradePage: React.FC = () => {
       options.push({
         type: 'alias',
         id: alias.id,
-        label: `${alias.alias} (${alias.address.slice(0, 6)}...${alias.address.slice(-4)})`,
+        label: `${alias.alias} (${alias.address})`,
         value: alias.address,
         uniqueKey: `alias-${optionIndex}`,
       });
@@ -399,8 +399,7 @@ const TradePage: React.FC = () => {
                   <option value="">-- 选择发送方账户 --</option>
                   {accounts.map((account) => (
                     <option key={`${account.type}-${account.id}`} value={account.address}>
-                      {account.account_name} ({account.address.slice(0, 6)}...
-                      {account.address.slice(-4)})
+                      {account.account_name} ({account.address})
                     </option>
                   ))}
                 </select>
@@ -413,29 +412,7 @@ const TradePage: React.FC = () => {
                       <p className="text-sm font-mono text-blue-900 break-all">{fromAddress}</p>
                     </div>
 
-                    {balancesLoading ? (
-                      <div className="p-3 bg-gray-100 border border-gray-300 rounded-lg text-center">
-                        <p className="text-sm text-gray-600">加载余额中...</p>
-                      </div>
-                    ) : tokenBalances.length > 0 ? (
-                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <p className="text-xs text-green-600 mb-2 font-semibold">可用代币余额</p>
-                        <div className="space-y-1">
-                          {tokenBalances.map((token) => (
-                            <div key={token.symbol} className="flex items-center justify-between">
-                              <span className="text-sm text-green-900">{token.symbol}</span>
-                              <span className="text-sm font-semibold text-green-900">
-                                {token.formatted}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
-                        <p className="text-sm text-yellow-700">暂无余额信息</p>
-                      </div>
-                    )}
+
                   </div>
                 )}
               </div>

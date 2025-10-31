@@ -230,19 +230,6 @@ export async function POST(request: NextRequest) {
         }
 
         // 第2步：执行实际转账（通过 eth_sendTransaction）
-        // 在 Anvil 中，我们需要先模拟签名，然后执行
-        const sendTxResponse = await fetch(rpcUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'anvil_impersonateAccount',
-            params: [fromAddress],
-            id: 12,
-          }),
-        });
-
-        // 现在从 fromAddress 账户发送交易
         const txResponse = await fetch(rpcUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

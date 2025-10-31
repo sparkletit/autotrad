@@ -19,9 +19,37 @@ interface CustomToken {
   decimals: number;
 }
 
+interface MainAccount {
+  id: number;
+  accountName: string;
+  address: string;
+  publicKey: string;
+  createTime: string;
+}
+
+interface DerivedAccount {
+  id: number;
+  mainAccountId: number;
+  accountName: string;
+  address: string;
+  publicKey: string;
+  derivationIndex: number;
+  createTime: string;
+}
+
+interface AccountOption {
+  id: number;
+  type: 'main' | 'derived';
+  mainAccountId?: number;
+  name: string;
+  address: string;
+}
+
 export default function BalanceCheckerPage() {
   const [searchAddress, setSearchAddress] = useState('');
   const [selectedNetwork, setSelectedNetwork] = useState('fork');
+  const [allAccounts, setAllAccounts] = useState<AccountOption[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([
     { address: '0x55d398326f99059fF775485246999027B3197955', symbol: 'USDT', decimals: 18 },
     { address: '0x8AC76a51cc950d9822D68b83FE1Ad97B32Cd580d', symbol: 'USDC', decimals: 18 },
@@ -49,10 +77,58 @@ export default function BalanceCheckerPage() {
     { id: 'polygon', name: 'Polygon' },
   ];
 
-  // 页面加载时从数据库读取自定义代币
+  // 页面加载时从数据库读取自定义代币和账号
   useEffect(() => {
-    const fetchCustomTokens = async () => {
+    const fetchData = async () => {
       try {
+        // 获取主账号
+        const accountsResponse = await fetch('/api/address-books/main-accounts');
+        const accountsData = await accountsResponse.json();
+        if (accountsData.success && accountsData.data) {
+          const accounts: AccountOption[] = [];
+          
+          // 添加主账号
+          for (const mainAccount of accountsData.data) {
+            accounts.push({
+              id: mainAccount.id,
+              type: 'main',
+              name: mainAccount.accountName,
+              address: mainAccount.address,
+            });
+            
+            // 获取该主账号的派生账号
+            try {
+              const derivedResponse = await fetch(`/api/address-books/main-accounts/${mainAccount.id}/derived-accounts`);
+              const derivedData = await derivedResponse.json();
+              if (derivedData.success && derivedData.data) {
+                for (const derivedAccount of derivedData.data) {
+                  accounts.push({
+                    id: derivedAccount.id,
+                    type: 'derived',
+                    mainAccountId: mainAccount.id,
+                    name: `∛ ${derivedAccount.accountName} (from ${mainAccount.accountName})`,
+                    address: derivedAccount.address,
+                  });
+                }
+              }
+            } catch (err) {
+              console.error(`加载主账号${mainAccount.id}的派生账号失败:`, err);
+            }
+          }
+          
+          setAllAccounts(accounts);
+          if (accounts.length > 0) {
+            const firstAccountKey = `${accounts[0].type}-${accounts[0].id}`;
+            setSelectedAccountId(firstAccountKey);
+            setSearchAddress(accounts[0].address);
+          }
+        }
+      } catch (err) {
+        console.error('加载主账号失败:', err);
+      }
+
+      try {
+        // 获取自定义代币
         const response = await fetch('/api/custom-tokens');
         const data = await response.json();
         if (data.success) {
@@ -68,8 +144,19 @@ export default function BalanceCheckerPage() {
         console.error('加载自定义代币失败:', err);
       }
     };
-    fetchCustomTokens();
+    fetchData();
   }, []);
+
+  // 处理账号选择变化
+  const handleAccountSelect = (accountKey: string) => {
+    const [type, idStr] = accountKey.split('-');
+    const accountId = parseInt(idStr);
+    const selected = allAccounts.find(acc => acc.id === accountId && acc.type === (type as 'main' | 'derived'));
+    if (selected) {
+      setSelectedAccountId(accountKey);
+      setSearchAddress(selected.address);
+    }
+  };
 
   // 关闭token下拉框的外部点击处理
   useEffect(() => {
@@ -293,6 +380,25 @@ export default function BalanceCheckerPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-3">账号选择</label>
+                  <select
+                    value={selectedAccountId || ''}
+                    onChange={(e) => handleAccountSelect(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">– 选择账号 –</option>
+                    {allAccounts.map((account) => (
+                      <option key={`${account.type}-${account.id}`} value={`${account.type}-${account.id}`}>
+                         ({account.address})
+                      </option>
+                    ))}
+                  </select>
+                  {allAccounts.length === 0 && (
+                    <p className="text-xs text-gray-500 mt-2">没有可用账号，请先到地址本管理添加</p>
+                  )}
                 </div>
 
                 <div>
