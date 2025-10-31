@@ -134,9 +134,24 @@ export async function GET(request: NextRequest) {
           contractAddress: token.address,
         });
       } catch (err) {
-        console.log(`获取${token.symbol}余额失败:`, err);
+        // 记录详细的错误信息
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.log(`获取${token.symbol}余额失败:`, errorMsg);
+        
+        // 如果是 Anvil fork 的存储错误，跳过此代币，按接投成丢发的态度处理
+        if (errorMsg.includes('storage') || errorMsg.includes('method handler crashed')) {
+          console.warn(`[警告] ${token.symbol} 余额查询失败（fork 网络的存储问题），跳过不显示`);
+          // 继续处理下一个代币，不中断整个流程
+          continue;
+        }
+        
+        // 其他网络错误也不中断流程
+        console.error(`[错误] ${token.symbol} 余额查询异常:`, err);
       }
     }
+
+    // 是否有至少一个成功的余额
+    const hasAtLeastOneBalance = balances.length > 0;
 
     return NextResponse.json({
       success: true,
