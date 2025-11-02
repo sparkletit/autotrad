@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mintETH, mintERC20, getBalance, getSupportedTokens, getAccountBalances } from '@/lib/mintService';
+import { mintETH, getBalance, getSupportedTokens, getAccountBalances } from '@/lib/mintService';
 
 /**
  * GET /api/fork/mint
@@ -62,13 +62,16 @@ export async function POST(request: NextRequest) {
 
     let txHash: string;
 
-    // 支持Mint原生资产（BNB）和ERC20代币
+    // 仅支持Mint原生资产（BNB）
     if (token === 'BNB' || token === 'ETH') {
       // BNB是原生资产，使用ETH的Mint方法（两者逻辑相同）
       txHash = await mintETH(address, amount);
     } else {
-      // 其他ERC20代币
-      txHash = await mintERC20(address, token, amount);
+      // 不支持Mint ERC20代币
+      return NextResponse.json(
+        { success: false, error: '暂不支持Mint ERC20代币，仅支持Mint BNB' },
+        { status: 400 }
+      );
     }
 
     // 获取更新后的余额

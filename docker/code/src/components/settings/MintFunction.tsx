@@ -205,23 +205,15 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
 
       {/* Mint表单 */}
       <div className="space-y-4 border-t border-gray-200 pt-6">
-        {/* 代币选择 */}
+        {/* 主网资产显示（仅BNB） */}
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">
-            选择要Mint的主网代币
+            主网资产
           </label>
-          <select
-            value={selectedToken}
-            onChange={(e) => setSelectedToken(e.target.value)}
-            disabled={loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {supportedTokens.map((token) => (
-              <option key={token.symbol} value={token.symbol} className="text-gray-900">
-                {token.symbol} - {token.name}
-              </option>
-            ))}
-          </select>
+          <div className="px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900">
+            <span className="font-medium">BNB - Binance Coin</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">主网原生资产，仅支持Mint BNB</p>
         </div>
 
         {/* Mint数量 */}
@@ -278,13 +270,13 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
           </div>
         )}
 
-        {/* Mint按钮 */}
+        {/* Mint按预 */}
         <button
           onClick={handleMint}
           disabled={loading || !mintAmount}
           className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
         >
-          {loading ? '处理中...' : `Mint ${selectedToken}`}
+          {loading ? '处理中...' : 'Mint BNB'}
         </button>
       </div>
     </div>

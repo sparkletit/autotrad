@@ -47,7 +47,7 @@ export default function AddressBooksPage() {
           <div className="mb-8 flex justify-between items-start">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">地址本</h1>
-              <p className="text-gray-600 mt-1">管理您的钙包账号和派生账号</p>
+              <p className="text-gray-600 mt-1">管理您的钱包账号和派生账号</p>
             </div>
             <button
               onClick={() => setShowCreateModal(true)}

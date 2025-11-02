@@ -115,42 +115,6 @@ export async function mintETH(address: string, amount: string): Promise<string> 
 }
 
 /**
- * 使用合约Mint ERC20代币（需要实现具体合约调用）
- * 这里使用简化的方式，直接设置余额
- */
-export async function mintERC20(
-  address: string,
-  tokenSymbol: string,
-  amount: string
-): Promise<string> {
-  try {
-    const token = MAINNET_TOKENS[tokenSymbol as keyof typeof MAINNET_TOKENS];
-    if (!token) {
-      throw new Error(`不支持的代币: ${tokenSymbol}`);
-    }
-
-    if (!token.address) {
-      throw new Error('不支持Mint原生资产，请使用mintETH');
-    }
-
-    // 直接使用宜主机访问地址，不依ForkManager中的配置（因为Fork是手动启动的）
-    const rpcUrl = 'http://host.docker.internal:8545';
-
-    // 对于BNB链ERC20，需要调用合约的mint函数
-    // 这里简化处理：使用eth_call来调用合约
-    // 实际应用中需要更复杂的合约互动逻辑
-
-    console.log(`Mint ${amount} ${tokenSymbol} 到 ${address}`);
-
-    // 返回模拟的交易哈希
-    return '0x' + Math.random().toString(16).slice(2);
-  } catch (error) {
-    console.error('Mint ERC20失败:', error);
-    throw error;
-  }
-}
-
-/**
  * 获取支持的代币列表
  */
 export function getSupportedTokens() {
