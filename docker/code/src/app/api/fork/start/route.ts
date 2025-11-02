@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     console.log(`生成Anvil启动命令: Block=${blockNumber}, Chain=${chainId}`);
 
     // 生成启动命令
-    const startCommand = `pkill -f "anvil --fork-url" 2>/dev/null; sleep 1; ${ANVIL_EXECUTABLE} --fork-url "${rpcUrl}" --fork-block-number ${blockNumber} --port ${forkPort} --host 0.0.0.0 --chain-id ${chainId} &`;
+    const startCommand = `pkill -f "anvil --fork-url" 2>/dev/null; sleep 1; ${ANVIL_EXECUTABLE} --fork-url "${rpcUrl}" --fork-block-number ${blockNumber} --port ${forkPort} --host 0.0.0.0 --chain-id ${chainId} > output.txt 2>&1 &`;
 
     return NextResponse.json({
       success: true,

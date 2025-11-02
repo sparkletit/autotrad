@@ -241,18 +241,25 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
-              onClick={() => setMintAmount('100')}
+              onClick={() => setMintAmount('1000')}
               className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors"
               disabled={loading}
             >
               100
             </button>
             <button
-              onClick={() => setMintAmount('1000')}
+              onClick={() => setMintAmount('10000')}
               className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors"
               disabled={loading}
             >
               1000
+            </button>
+                        <button
+              onClick={() => setMintAmount('100000')}
+              className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors"
+              disabled={loading}
+            >
+              100000
             </button>
           </div>
         </div>

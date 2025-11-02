@@ -33,6 +33,7 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
   const [currentConfig, setCurrentConfig] = useState<ForkConfig | null>(null);
   const [editingRpcUrl, setEditingRpcUrl] = useState<string>('');
   const [showRpcEditor, setShowRpcEditor] = useState(false);
+  const [fetchingLatestBlock, setFetchingLatestBlock] = useState(false);
 
   // 获取可用网络列表和当前配置
   useEffect(() => {
@@ -137,6 +138,32 @@ ${data.command}
       setError(errorMsg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGetLatestBlock = async () => {
+    if (!selectedChain) {
+      setError('请先选择网络');
+      return;
+    }
+
+    setFetchingLatestBlock(true);
+    setError('');
+
+    try {
+      const response = await fetch(`/api/fork/latest-block?chainKey=${selectedChain}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setBlockNumber(data.blockNumber.toString());
+      } else {
+        setError(`获取最新区块号失败: ${data.error}`);
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : '获取最新区块号失败';
+      setError(errorMsg);
+    } finally {
+      setFetchingLatestBlock(false);
     }
   };
 
@@ -283,14 +310,24 @@ ${data.command}
           <label className="block text-sm font-medium text-gray-900 mb-2">
             要Fork的区块号
           </label>
-          <input
-            type="number"
-            value={blockNumber}
-            onChange={(e) => setBlockNumber(e.target.value)}
-            placeholder="输入区块号（如: 20000000）"
-            disabled={isForking || loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          />
+          <div className="flex gap-2">
+            <input
+              type="number"
+              value={blockNumber}
+              onChange={(e) => setBlockNumber(e.target.value)}
+              placeholder="输入区块号（如: 20000000）"
+              disabled={isForking || loading}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            />
+            <button
+              onClick={handleGetLatestBlock}
+              disabled={isForking || loading || fetchingLatestBlock || !selectedChain}
+              className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors text-sm whitespace-nowrap"
+              title="获取最新区块号"
+            >
+              {fetchingLatestBlock ? '获取中...' : '获取最新'}
+            </button>
+          </div>
           <p className="text-xs text-gray-500 mt-1">
             使用最近的区块号以获得最新的链上状态
           </p>
