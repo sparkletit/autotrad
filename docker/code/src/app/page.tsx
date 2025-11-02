@@ -1,5 +1,11 @@
 import Header from "@/components/Header";
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "仪表板",
+  description: "Web3 交易平台仪表板",
+};
 
 export default function Home() {
   return (

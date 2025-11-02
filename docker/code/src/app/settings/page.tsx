@@ -3,6 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import Sidebar from '@/components/settings/Sidebar';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: '设置',
+  description: 'Web3 交易平台 - 设置功能',
+};
 import RPCNodeSettings from '@/components/settings/RPCNodeSettings';
 import AddressAliasSettings from '@/components/settings/AddressAliasSettings';
 import ForkNetworkConfig from '@/components/settings/ForkNetworkConfig';

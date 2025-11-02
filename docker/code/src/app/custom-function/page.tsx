@@ -2,6 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: '自定义函数',
+  description: 'Web3 交易平台 - 自定义函数功能',
+};
 
 interface Account {
   id: number;

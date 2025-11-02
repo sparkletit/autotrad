@@ -2,6 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: '交换',
+  description: 'Web3 交易平台 - 交换功能',
+};
 
 interface Account {
   id: number;
