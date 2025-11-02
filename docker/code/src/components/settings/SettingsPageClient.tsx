@@ -60,7 +60,7 @@ export default function SettingsPageClient() {
     <div className="flex">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
-      <main className="flex-1 p-8 pt-8">
+      <main className="flex-1 p-8 pt-8 bg-white">
         <div className="max-w-6xl mx-auto">
           {/* 页面标题 */}
           <div className="mb-8">
