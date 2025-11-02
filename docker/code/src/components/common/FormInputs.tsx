@@ -48,6 +48,7 @@ interface FormSelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElem
   onChange: (value: string) => void;
   helpText?: string;
   placeholder?: string;
+  keyPrefix?: string;
 }
 
 /**
@@ -56,7 +57,7 @@ interface FormSelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElem
  */
 export const FormSelect = React.forwardRef<HTMLSelectElement, FormSelectProps>(
   (
-    { label, error, options, helpText, onChange, placeholder, className = '', ...props },
+    { label, error, options, helpText, onChange, placeholder, keyPrefix = 'opt', className = '', ...props },
     ref
   ) => {
     return (
@@ -73,8 +74,8 @@ export const FormSelect = React.forwardRef<HTMLSelectElement, FormSelectProps>(
           {...props}
         >
           {placeholder && <option value="">{placeholder}</option>}
-          {options.map((option) => (
-            <option key={`${option.value}`} value={option.value}>
+          {options.map((option, index) => (
+            <option key={`${keyPrefix}-${index}`} value={option.value}>
               {option.label}
             </option>
           ))}

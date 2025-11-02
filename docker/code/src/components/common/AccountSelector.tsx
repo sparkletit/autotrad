@@ -97,6 +97,7 @@ const AccountSelector: React.FC<AccountSelectorProps> = ({
       onChange={onChange}
       disabled={disabled || loading}
       error={error}
+      keyPrefix="account"
     />
   );
 };
