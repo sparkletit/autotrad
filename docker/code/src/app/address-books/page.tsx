@@ -1,6 +1,3 @@
-'use client';
-'use client';
-
 import React from 'react';
 import type { Metadata } from 'next';
 import AddressBooksClient from '@/components/address-books/AddressBooksClient';
