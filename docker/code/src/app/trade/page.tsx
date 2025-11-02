@@ -1,5 +1,7 @@
 'use client';
 
+'use client';
+
 import React, { useState, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 
