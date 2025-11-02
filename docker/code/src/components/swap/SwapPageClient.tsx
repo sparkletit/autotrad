@@ -1,16 +1,185 @@
-import React from 'react';
-import type { Metadata } from 'next';
-import SwapPageClient from '@/components/swap/SwapPageClient';
+'use client';
 
-export const metadata: Metadata = {
-  title: '交换 - Web3 交易平台',
-  description: 'Web3 交易平台 - 代币交换功能',
-};
+import React, { useState, useEffect } from 'react';
+import Header from '@/components/Header';
 
-export default function SwapPage() {
-  return <SwapPageClient />;
+interface Account {
+  id: number;
+  account_name: string;
+  address: string;
+  type: 'main' | 'derived';
 }
 
+interface TokenBalance {
+  symbol: string;
+  balance: string;
+  formatted: string;
+  decimals: number;
+  contractAddress: string | null;
+}
+
+interface CustomToken {
+  symbol: string;
+  address: string;
+  decimals: number;
+}
+
+interface PairReserves {
+  reserve0: string;
+  reserve1: string;
+  blockTimestampLast: number;
+  token0: string;
+  token1: string;
+}
+
+const SwapPageClient: React.FC = () => {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
+  const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [fromAddress, setFromAddress] = useState('');
+  const [selectedNetwork, setSelectedNetwork] = useState('fork');
+  const [pairAddress, setPairAddress] = useState('');
+  const [pairReserves, setPairReserves] = useState<PairReserves | null>(null);
+  const [loadingReserves, setLoadingReserves] = useState(false);
+  const [gasMode, setGasMode] = useState<'auto' | '500000' | '1000000'>('auto');
+  const [customGas, setCustomGas] = useState('');
+  const [slippageMode, setSlippageMode] = useState<'auto' | '0.5' | '5' | '10' | '30'>('0.5');
+  const [customSlippage, setCustomSlippage] = useState('');
+  const [selectedTokenIn, setSelectedTokenIn] = useState('');
+  const [selectedTokenOut, setSelectedTokenOut] = useState('');
+  const [amountIn, setAmountIn] = useState('');
+  const [amountOut, setAmountOut] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [txHash, setTxHash] = useState('');
+  const [showWrapModal, setShowWrapModal] = useState(false);
+  const [showAddTokenModal, setShowAddTokenModal] = useState(false);
+  const [wrapAmount, setWrapAmount] = useState('');
+  const [newTokenSymbol, setNewTokenSymbol] = useState('');
+  const [newTokenAddress, setNewTokenAddress] = useState('');
+  const [newTokenDecimals, setNewTokenDecimals] = useState('18');
+
+  const isPairAddressValid = pairAddress.match(/^0x[a-fA-F0-9]{40}$/);
+  
+  const allTokens = [
+    { symbol: 'BNB', address: '0x0000000000000000000000000000000000000000', decimals: 18 },
+    { symbol: 'WBNB', address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', decimals: 18 },
+    ...customTokens,
+  ];
+
+  const uniqueTokens = allTokens.reduce((acc, token) => {
+    const exists = acc.find(t => t.address.toLowerCase() === token.address.toLowerCase());
+    if (!exists) {
+      acc.push(token);
+    }
+    return acc;
+  }, [] as typeof allTokens);
+
+  const getGasLimit = () => {
+    if (gasMode === 'auto') return 'auto';
+    if (gasMode === '500000') return '500000';
+    if (gasMode === '1000000') return '1000000';
+    return customGas || 'auto';
+  };
+
+  const getSlippage = () => {
+    if (slippageMode === 'auto') return 'auto';
+    if (slippageMode === '0.5') return '0.5';
+    if (slippageMode === '5') return '5';
+    if (slippageMode === '10') return '10';
+    if (slippageMode === '30') return '30';
+    return customSlippage || '0.5';
+  };
+
+  useEffect(() => {
+    fetchAccounts();
+    fetchCustomTokens();
+  }, []);
+
+  useEffect(() => {
+    if (fromAddress) {
+      fetchTokenBalances(fromAddress);
+    }
+  }, [fromAddress]);
+
+  const fetchAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts/all');
+      const data = await response.json();
+      if (data.success) {
+        setAccounts(data.data || []);
+      }
+    } catch (err) {
+      console.error('获取账户列表失败:', err);
+    }
+  };
+
+  const fetchCustomTokens = async () => {
+    try {
+      const response = await fetch('/api/custom-tokens');
+      const data = await response.json();
+      if (data.success) {
+        setCustomTokens(data.data.map((t: any) => ({
+          symbol: t.symbol,
+          address: t.address,
+          decimals: t.decimals,
+        })));
+      }
+    } catch (err) {
+      console.error('加载自定义代币失败:', err);
+    }
+  };
+
+  const fetchTokenBalances = async (address: string) => {
+    try {
+      const response = await fetch(`/api/accounts/${address}/balances`);
+      const data = await response.json();
+      if (data.success) {
+        setTokenBalances(data.data || []);
+      }
+    } catch (err) {
+      console.error('获取代币余额失败:', err);
+    }
+  };
+
+  const handleQueryReserves = async () => {
+    if (!isPairAddressValid) {
+      setError('请输入有效的交易池地址');
+      return;
+    }
+
+    try {
+      setLoadingReserves(true);
+      setError('');
+      
+      const response = await fetch('/api/swap/get-reserves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pairAddress,
+          network: selectedNetwork,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setPairReserves(data.data);
+        setSuccess('储备查询成功');
+        setTimeout(() => setSuccess(''), 2000);
+      } else {
+        setError(data.error || '查询储备失败');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '查询储备失败');
+    } finally {
+      setLoadingReserves(false);
+    }
+  };
+
+  const handleClickWrapBNBButton = () => {
+    if (!fromAddress) {
       setError('请先选择账户');
       return;
     }
@@ -18,7 +187,6 @@ export default function SwapPage() {
     setError('');
   };
 
-  // 执行包装WBNB
   const handleExecuteWrapBNB = async () => {
     if (!wrapAmount || parseFloat(wrapAmount) <= 0) {
       setError('请输入有效的BNB数量');
@@ -61,7 +229,6 @@ export default function SwapPage() {
     }
   };
 
-  // 添加代币到数据库
   const handleAddTokenToDatabase = async () => {
     if (!newTokenSymbol.trim()) {
       setError('请输入代币符号');
@@ -105,7 +272,6 @@ export default function SwapPage() {
     }
   };
 
-  // 执行 Swap
   const handleSwap = async () => {
     if (!fromAddress) {
       setError('请先选择账户');
@@ -355,4 +521,4 @@ export default function SwapPage() {
   );
 };
 
-export default SwapPage;
+export default SwapPageClient;
