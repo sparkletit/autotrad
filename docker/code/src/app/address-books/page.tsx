@@ -3,12 +3,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
-import type { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: '地址本',
-  description: 'Web3 交易平台 - 地址本功能',
-};
 import MainAccountsList from '@/components/address-books/MainAccountsList';
 import CreateMainAccountModal from '@/components/address-books/CreateMainAccountModal';
 

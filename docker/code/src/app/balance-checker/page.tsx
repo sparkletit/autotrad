@@ -2,12 +2,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Header from '@/components/Header';
-import type { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: '余额查询',
-  description: 'Web3 交易平台 - 余额查询功能',
-};
 
 interface TokenBalance {
   symbol: string;

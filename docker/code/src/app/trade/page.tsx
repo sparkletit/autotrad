@@ -2,12 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
-import type { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: '交易',
-  description: 'Web3 交易平台 - 交易功能',
-};
 
 interface ChainInfo {
   chainId: number;
