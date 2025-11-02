@@ -29,6 +29,7 @@ export default function AddressBooksPage() {
   };
 
   useEffect(() => {
+    document.title = '地址本 - Web3 交易平台';
     fetchMainAccounts();
   }, []);
 

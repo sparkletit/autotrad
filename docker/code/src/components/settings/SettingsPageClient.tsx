@@ -16,6 +16,7 @@ export default function SettingsPageClient() {
 
   // 页面挂载时初始化Fork状态
   useEffect(() => {
+    document.title = '设置 - Web3 交易平台';
     fetchInitialForkState();
   }, []);
 

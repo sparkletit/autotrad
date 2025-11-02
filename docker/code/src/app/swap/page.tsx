@@ -107,6 +107,7 @@ const SwapPage: React.FC = () => {
   };
 
   useEffect(() => {
+    document.title = '交换 - Web3 交易平台';
     fetchAccounts();
     fetchCustomTokens();
   }, []);

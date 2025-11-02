@@ -74,6 +74,7 @@ const TradePage: React.FC = () => {
   );
 
   useEffect(() => {
+    document.title = '交易 - Web3 交易平台';
     fetchChainInfo();
     const interval = setInterval(fetchChainInfo, 5000);
     return () => clearInterval(interval);

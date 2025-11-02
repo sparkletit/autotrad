@@ -59,6 +59,7 @@ const CustomFunctionPage: React.FC = () => {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   useEffect(() => {
+    document.title = '自定义函数 - Web3 交易平台';
     fetchAccounts();
     fetchTemplates();
   }, []);
