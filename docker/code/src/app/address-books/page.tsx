@@ -39,7 +39,7 @@ export default function AddressBooksPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
+      <Header title="地址本" />
       
       <main className="flex-1 p-8 pt-8">
         <div className="max-w-6xl mx-auto">

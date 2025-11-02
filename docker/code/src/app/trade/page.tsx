@@ -315,7 +315,7 @@ const TradePage: React.FC = () => {
 
   return (
     <>
-      <Header title="Web3 交易平台" />
+      <Header title="交易" />
       <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
         {/* 页面标题和链信息 */}

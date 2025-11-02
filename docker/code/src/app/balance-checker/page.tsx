@@ -355,7 +355,7 @@ export default function BalanceCheckerPage() {
 
   return (
     <>
-      <Header title="Web3 交易平台" />
+      <Header title="余额查询" />
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-6xl mx-auto">
           <div className="mb-8">

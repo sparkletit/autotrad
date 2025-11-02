@@ -254,7 +254,7 @@ const CustomFunctionPage: React.FC = () => {
 
   return (
     <>
-      <Header title="自定义函数执行" />
+      <Header title="自定义函数" />
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">自定义合约函数执行</h1>

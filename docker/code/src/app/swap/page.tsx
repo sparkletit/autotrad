@@ -352,7 +352,7 @@ const SwapPage: React.FC = () => {
 
   return (
     <>
-      <Header title="Web3 交易平台" />
+      <Header title="交换" />
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">代币交换</h1>
