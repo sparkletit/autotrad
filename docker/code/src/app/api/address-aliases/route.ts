@@ -11,7 +11,7 @@ const dbConfig = {
 
 /**
  * GET /api/address-aliases
- * 获取所有地址别名
+ * 获取所有交易池地址
  */
 export async function GET(request: NextRequest) {
   let connection;
@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
       data: rows,
     });
   } catch (error) {
-    console.error('获取地址别名失败:', error);
+    console.error('获取交易池地址失败:', error);
     if (connection) await connection.end();
     return NextResponse.json(
-      { success: false, error: '获取地址别名失败' },
+      { success: false, error: '获取交易池地址失败' },
       { status: 500 }
     );
   }
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/address-aliases
- * 添加新的地址别名
+ * 添加新的交易池地址
  */
 export async function POST(request: NextRequest) {
   let connection;
@@ -79,14 +79,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: '地址别名添加成功',
+      message: '交易池地址添加成功',
       id: (result as any).insertId,
     });
   } catch (error) {
-    console.error('添加地址别名失败:', error);
+    console.error('添加交易池地址失败:', error);
     if (connection) await connection.end();
     return NextResponse.json(
-      { success: false, error: '添加地址别名失败' },
+      { success: false, error: '添加交易池地址失败' },
       { status: 500 }
     );
   }

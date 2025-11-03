@@ -17,7 +17,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     { id: 'fork', label: 'Fork网络', icon: '🔀' },
     { id: 'identity', label: '用户身份', icon: '👤' },
     { id: 'rpc', label: 'RPC 节点', icon: '🔗' },
-    { id: 'address', label: '地址别名', icon: '📍' },
+    { id: 'address', label: '交易池地址', icon: '📍' },
   ];
 
   const quickActions = [

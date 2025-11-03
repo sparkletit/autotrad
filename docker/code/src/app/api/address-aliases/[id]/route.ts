@@ -11,7 +11,7 @@ const dbConfig = {
 
 /**
  * PUT /api/address-aliases/[id]
- * 更新地址别名
+ * 更新交易池地址
  */
 export async function PUT(
   request: NextRequest,
@@ -57,20 +57,20 @@ export async function PUT(
 
     if ((result as any).affectedRows === 0) {
       return NextResponse.json(
-        { success: false, error: '地址别名不存在' },
+        { success: false, error: '交易池地址不存在' },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: '地址别名更新成功',
+      message: '交易池地址更新成功',
     });
   } catch (error) {
-    console.error('更新地址别名失败:', error);
+    console.error('更新交易池地址失败:', error);
     if (connection) await connection.end();
     return NextResponse.json(
-      { success: false, error: '更新地址别名失败' },
+      { success: false, error: '更新交易池地址失败' },
       { status: 500 }
     );
   }
@@ -78,7 +78,7 @@ export async function PUT(
 
 /**
  * DELETE /api/address-aliases/[id]
- * 删除地址别名
+ * 删除交易池地址
  */
 export async function DELETE(
   request: NextRequest,
@@ -101,20 +101,20 @@ export async function DELETE(
 
     if ((result as any).affectedRows === 0) {
       return NextResponse.json(
-        { success: false, error: '地址别名不存在' },
+        { success: false, error: '交易池地址不存在' },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: '地址别名删除成功',
+      message: '交易池地址删除成功',
     });
   } catch (error) {
-    console.error('删除地址别名失败:', error);
+    console.error('删除交易池地址失败:', error);
     if (connection) await connection.end();
     return NextResponse.json(
-      { success: false, error: '删除地址别名失败' },
+      { success: false, error: '删除交易池地址失败' },
       { status: 500 }
     );
   }

@@ -171,3 +171,60 @@ export async function getMainAccountById(mainAccountId: number) {
     throw error;
   }
 }
+
+/**
+ * 删除主账号（包括关联的派生账号）
+ * @param mainAccountId - 主账号ID
+ */
+export async function deleteMainAccount(mainAccountId: number) {
+  try {
+    const connection = await pool.getConnection();
+    try {
+      // 删除关联的派生账号
+      await connection.execute(
+        'DELETE FROM derived_accounts WHERE main_account_id = ?',
+        [mainAccountId]
+      );
+
+      // 删除主账号
+      await connection.execute(
+        'DELETE FROM main_accounts WHERE id = ?',
+        [mainAccountId]
+      );
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('删除主账号失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 批量删除派生账号
+ * @param derivedAccountIds - 派生账号ID数组
+ * @param mainAccountId - 主账号ID（用于验证）
+ */
+export async function deleteDerivedAccounts(derivedAccountIds: number[], mainAccountId: number) {
+  try {
+    if (!Array.isArray(derivedAccountIds) || derivedAccountIds.length === 0) {
+      throw new Error('需要至少选择一个账号');
+    }
+
+    const connection = await pool.getConnection();
+    try {
+      const placeholders = derivedAccountIds.map(() => '?').join(',');
+      
+      // 删除派生账号（需要验证主账号ID）
+      await connection.execute(
+        `DELETE FROM derived_accounts WHERE id IN (${placeholders}) AND main_account_id = ?`,
+        [...derivedAccountIds, mainAccountId]
+      );
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('批量删除派生账号失败:', error);
+    throw error;
+  }
+}

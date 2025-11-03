@@ -128,8 +128,8 @@ export default function RPCNodesManager() {
 
   // 编辑RPC节点
   const handleEditNode = async (id: number) => {
-    if (!editingNode || !editingNode.node_name?.trim()) {
-      setError('节点名称不能为空');
+    if (!editingNode || !editingNode.node_name?.trim() || !editingNode.rpc_url?.trim()) {
+      setError('节点名称和RPC URL不能为空');
       return;
     }
 
@@ -141,6 +141,7 @@ export default function RPCNodesManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           node_name: editingNode.node_name,
+          rpc_url: editingNode.rpc_url,
           is_active: editingNode.is_active,
         }),
       });
@@ -344,7 +345,20 @@ export default function RPCNodesManager() {
                             node_name: e.target.value,
                           })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="节点名称"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="url"
+                        value={editingNode?.rpc_url || ''}
+                        onChange={(e) =>
+                          setEditingNode({
+                            ...editingNode,
+                            rpc_url: e.target.value,
+                          })
+                        }
+                        placeholder="RPC URL"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                       />
                       <div className="flex gap-2">
                         <button

@@ -7,6 +7,7 @@ interface Chain {
   name: string;
   id: number;
   rpcUrl: string;
+  nodes?: Array<{ nodeName: string; rpcUrl: string }>; // 此网络的所有RPC节点
 }
 
 interface ForkConfig {
@@ -25,14 +26,13 @@ interface ForkNetworkConfigProps {
 export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, isForking: initialIsForking }: ForkNetworkConfigProps) {
   const [chains, setChains] = useState<Chain[]>([]);
   const [selectedChain, setSelectedChain] = useState<string>('bsc');
+  const [selectedRpcUrl, setSelectedRpcUrl] = useState<string>(''); // 选中的RPC URL
   const [blockNumber, setBlockNumber] = useState<string>('');
   const [forkPort, setForkPort] = useState<string>('8545');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [isForking, setIsForking] = useState(initialIsForking || false);
   const [currentConfig, setCurrentConfig] = useState<ForkConfig | null>(null);
-  const [editingRpcUrl, setEditingRpcUrl] = useState<string>('');
-  const [showRpcEditor, setShowRpcEditor] = useState(false);
   const [fetchingLatestBlock, setFetchingLatestBlock] = useState(false);
 
   // 获取可用网络列表和当前配置
@@ -48,6 +48,19 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
     };
   }, [isForking]);
 
+  // 网络选择变化时，同时更新RPC URL
+  const handleChainChange = (chainKey: string) => {
+    setSelectedChain(chainKey);
+    const chainInfo = chains.find((c) => c.key === chainKey);
+    if (chainInfo) {
+      // 优先使用该网络的第一个RPC节点，如果没有则使用默认RPC
+      const rpcUrl = chainInfo.nodes && chainInfo.nodes.length > 0 
+        ? chainInfo.nodes[0].rpcUrl 
+        : chainInfo.rpcUrl;
+      setSelectedRpcUrl(rpcUrl);
+    }
+  };
+
   const fetchConfig = async () => {
     try {
       // 先检测实际的Anvil是否运行
@@ -60,6 +73,15 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
       
       if (configData.success) {
         setChains(configData.chains);
+        // 第一次加载时，默认设置选中Chain的第一个RPC节点
+        if (!selectedRpcUrl && configData.chains.length > 0) {
+          const defaultChain = configData.chains.find((c: Chain) => c.key === selectedChain) || configData.chains[0];
+          if (defaultChain?.nodes && defaultChain.nodes.length > 0) {
+            setSelectedRpcUrl(defaultChain.nodes[0].rpcUrl);
+          } else {
+            setSelectedRpcUrl(defaultChain.rpcUrl);
+          }
+        }
       }
 
       // 使用实际检测结果更新Fork是否运行
@@ -85,8 +107,8 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
   };
 
   const handleFork = async () => {
-    if (!blockNumber || !selectedChain) {
-      setError('请选择网络和填入区块号');
+    if (!blockNumber || !selectedChain || !selectedRpcUrl) {
+      setError('请选择网络、RPC节点并填入区块号');
       return;
     }
 
@@ -94,23 +116,16 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
     setError('');
 
     try {
-      // 通过start API启动anvil容器
-      const chainInfo = chains.find(c => c.key === selectedChain);
-      if (!chainInfo) {
-        setError('网络信息获取失败');
-        return;
-      }
-
       const response = await fetch('/api/fork/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          rpcUrl: chainInfo.rpcUrl,
+          rpcUrl: selectedRpcUrl, // 使用选中的RPC URL
           blockNumber: parseInt(blockNumber),
           forkPort: parseInt(forkPort),
-          chainId: chainInfo.id,
+          chainId: chains.find(c => c.key === selectedChain)?.id,
         }),
       });
 
@@ -210,48 +225,6 @@ ${data.command}
 
   const selectedChainInfo = chains.find((c) => c.key === selectedChain);
 
-  const handleSaveRpcUrl = async () => {
-    if (!editingRpcUrl.trim()) {
-      setError('请输入有效的RPC URL');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/rpc-nodes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          chainKey: selectedChain,
-          rpcUrl: editingRpcUrl,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        // 更新chains中的RPC URL
-        setChains(chains.map((c) => 
-          c.key === selectedChain 
-            ? { ...c, rpcUrl: editingRpcUrl }
-            : c
-        ));
-        setShowRpcEditor(false);
-      } else {
-        setError(data.error || '保存RPC配置失败');
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : '保存RPC配置失败';
-      setError(errorMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-bold mb-6 text-gray-900">Fork网络配置</h2>
@@ -290,7 +263,7 @@ ${data.command}
           <label className="block text-sm font-medium text-gray-900 mb-2">选择网络</label>
           <select
             value={selectedChain}
-            onChange={(e) => setSelectedChain(e.target.value)}
+            onChange={(e) => handleChainChange(e.target.value)}
             disabled={isForking || loading}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           >
@@ -300,9 +273,32 @@ ${data.command}
               </option>
             ))}
           </select>
-          {selectedChainInfo && (
-            <p className="text-xs text-gray-500 mt-1">RPC: {selectedChainInfo.rpcUrl}</p>
-          )}
+        </div>
+
+        {/* RPC节点选择 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">选择RPC节点</label>
+          <select
+            value={selectedRpcUrl || ''}
+            onChange={(e) => setSelectedRpcUrl(e.target.value)}
+            disabled={isForking || loading}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {selectedChainInfo ? (
+              selectedChainInfo.nodes && selectedChainInfo.nodes.length > 0 ? (
+                selectedChainInfo.nodes.map((node, index) => (
+                  <option key={index} value={node.rpcUrl}>
+                    {node.nodeName}
+                  </option>
+                ))
+              ) : (
+                <option value={selectedChainInfo.rpcUrl}>
+                  {selectedChainInfo.name} - 默认RPC
+                </option>
+              )
+            ) : null}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">当前RPC: {selectedRpcUrl || selectedChainInfo?.rpcUrl}</p>
         </div>
 
         {/* 区块号配置 */}
@@ -332,68 +328,6 @@ ${data.command}
             使用最近的区块号以获得最新的链上状态
           </p>
         </div>
-
-        {/* RPC URL配置编辑 */}
-        {showRpcEditor && (
-          <div className="p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium text-gray-900">编辑RPC URL</p>
-              <button
-                onClick={() => setShowRpcEditor(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={editingRpcUrl}
-                onChange={(e) => setEditingRpcUrl(e.target.value)}
-                placeholder="输入RPC URL (例如: https://...)"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSaveRpcUrl}
-                  disabled={loading || !editingRpcUrl.trim()}
-                  className="flex-1 py-2 px-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {loading ? '保存中...' : '保存RPC'}
-                </button>
-                <button
-                  onClick={() => setShowRpcEditor(false)}
-                  className="flex-1 py-2 px-3 bg-gray-300 hover:bg-gray-400 text-gray-900 text-sm font-medium rounded-lg transition-colors"
-                >
-                  取消
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* RPC URL显示和编辑按钮 */}
-        {!showRpcEditor && (
-          <div className="p-3 bg-gray-50 rounded border border-gray-200">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <p className="text-xs text-gray-500 mb-1">当前RPC</p>
-                <p className="text-sm font-mono text-gray-900 break-all">
-                  {selectedChainInfo?.rpcUrl}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setEditingRpcUrl(selectedChainInfo?.rpcUrl || '');
-                  setShowRpcEditor(true);
-                }}
-                className="ml-2 px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors flex-shrink-0"
-              >
-                编辑
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Fork端口配置 */}
         <div>

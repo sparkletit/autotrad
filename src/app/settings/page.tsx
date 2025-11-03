@@ -14,7 +14,7 @@ export default function SettingsPage() {
     const titles: Record<string, { title: string; desc: string }> = {
       identity: { title: '用户身份配置', desc: '自定义您的交易身份和偏好设置' },
       rpc: { title: 'RPC 节点配置', desc: '管理您的 RPC 节点连接' },
-      address: { title: '地址别墅 & 别名', desc: '管理您的钱包地址别名' },
+      address: { title: '交易池地址', desc: '管理您的交易池地址' },
     };
     return titles[activeTab] || titles.identity;
   };

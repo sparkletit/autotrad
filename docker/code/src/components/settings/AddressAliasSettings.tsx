@@ -30,7 +30,7 @@ const AddressAliasSettings: React.FC = () => {
   const networks = ['Ethereum', 'Polygon', 'BSC', 'Arbitrum', 'Base'];
   const types = ['个人', '企业'];
 
-  // 获取所有地址别名
+  // 获取所有交易池地址
   useEffect(() => {
     fetchAliases();
   }, []);
@@ -75,7 +75,7 @@ const AddressAliasSettings: React.FC = () => {
 
       const data = await response.json();
       if (data.success) {
-        setSuccess('地址别名添加成功');
+        setSuccess('交易池地址添加成功');
         setNewAlias('');
         setNewAddress('');
         setNewNetwork('');
@@ -122,7 +122,7 @@ const AddressAliasSettings: React.FC = () => {
 
       const data = await response.json();
       if (data.success) {
-        setSuccess('地址别名更新成功');
+        setSuccess('交易池地址更新成功');
         setEditingId(null);
         await fetchAliases();
       } else {
@@ -137,7 +137,7 @@ const AddressAliasSettings: React.FC = () => {
 
   // 删除别名
   const handleDeleteAlias = async (id: number) => {
-    if (!confirm('确定要删除这个地址别名吗？')) {
+    if (!confirm('确定要删除这个交易池地址吗？')) {
       return;
     }
 
@@ -149,7 +149,7 @@ const AddressAliasSettings: React.FC = () => {
 
       const data = await response.json();
       if (data.success) {
-        setSuccess('地址别名删除成功');
+        setSuccess('交易池地址删除成功');
         await fetchAliases();
       } else {
         setError(data.error || '删除失败');
@@ -163,14 +163,14 @@ const AddressAliasSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* 地址别墅配置 */}
+      {/* 交易池地址 */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
               <span className="text-purple-600 text-lg">📍</span>
             </div>
-            <h2 className="text-lg font-bold text-gray-900">地址别墅 & 别名</h2>
+            <h2 className="text-lg font-bold text-gray-900">交易池地址</h2>
           </div>
         </div>
 
@@ -188,7 +188,7 @@ const AddressAliasSettings: React.FC = () => {
 
         {/* 添加新地址表单 */}
         <div className="mb-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">添加新地址别名</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">添加新交易池地址</h3>
           <div className="grid grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">别名</label>
@@ -253,7 +253,7 @@ const AddressAliasSettings: React.FC = () => {
         {loading && aliases.length === 0 ? (
           <p className="text-center text-gray-600 py-8">加载中...</p>
         ) : aliases.length === 0 ? (
-          <p className="text-center text-gray-600 py-8">暂无地址别名，请添加一个</p>
+          <p className="text-center text-gray-600 py-8">暂无交易池地址，请添加一个</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">

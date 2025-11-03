@@ -23,6 +23,7 @@ export default function MainAccountsList({ accounts, loading, onRefresh }: Props
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showSecretsModal, setShowSecretsModal] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<MainAccount | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
 
   const handleShowSecrets = (account: MainAccount) => {
     setSelectedAccount(account);
@@ -32,6 +33,36 @@ export default function MainAccountsList({ accounts, loading, onRefresh }: Props
   const handleCloseSecrets = () => {
     setShowSecretsModal(false);
     setSelectedAccount(null);
+  };
+
+  const handleDeleteMainAccount = async (accountId: number, accountName: string) => {
+    if (!window.confirm(`确定要删除主账号 "${accountName}" 吗？\n删除后，该账号及其所有派生账号都将被移除，且无法恢复。`)) {
+      return;
+    }
+
+    try {
+      setDeleting(accountId);
+      const response = await fetch(
+        `/api/address-books/main-accounts/${accountId}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('主账号已删除');
+        onRefresh();
+      } else {
+        alert(data.error || '删除失败，请稍后重试');
+      }
+    } catch (error) {
+      alert('删除失败，请稍后重试');
+      console.error('删除主账号失败:', error);
+    } finally {
+      setDeleting(null);
+    }
   };
 
   if (loading) {
@@ -91,6 +122,14 @@ export default function MainAccountsList({ accounts, loading, onRefresh }: Props
                   className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
                 >
                   {expandedId === account.id ? '▼ 隐藏' : '▶ 展开'}
+                </button>
+                <button
+                  onClick={() => handleDeleteMainAccount(account.id, account.account_name)}
+                  disabled={deleting === account.id}
+                  className="px-3 py-1 text-sm bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors disabled:opacity-50"
+                  title="删除主账号及其所有派生账号"
+                >
+                  {deleting === account.id ? '删除中...' : '🗑️'}
                 </button>
               </div>
             </div>

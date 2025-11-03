@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
+import SearchableAddressSelect from './SearchableAddressSelect';
 
 interface Account {
   id: number;
@@ -350,7 +351,7 @@ const SwapPageClient: React.FC = () => {
                   <option value="">-- 选择账户 --</option>
                   {accounts.map((account) => (
                     <option key={`${account.type}-${account.id}`} value={account.address}>
-                      {account.account_name} ({account.address.slice(0, 6)}...{account.address.slice(-4)})
+                      {account.account_name} ({account.address})
                     </option>
                   ))}
                 </select>
@@ -359,9 +360,20 @@ const SwapPageClient: React.FC = () => {
               {/* 第一步：交易池地址 */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">第一步：交易池地址</h2>
-                <div className="flex gap-3">
-                  <input type="text" value={pairAddress} onChange={(e) => setPairAddress(e.target.value)} placeholder="输入 Pair 合约地址 (0x...)" className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-900 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <button onClick={handleQueryReserves} disabled={loadingReserves || !isPairAddressValid} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">从地址别名中选择或输入地址</label>
+                    <SearchableAddressSelect
+                      value={pairAddress}
+                      onChange={setPairAddress}
+                      placeholder="搜索地址别名或粘贴地址..."
+                    />
+                  </div>
+                  <button
+                    onClick={handleQueryReserves}
+                    disabled={loadingReserves || !isPairAddressValid}
+                    className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+                  >
                     {loadingReserves ? '查询中...' : '查询储备'}
                   </button>
                 </div>

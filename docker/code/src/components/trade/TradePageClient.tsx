@@ -164,7 +164,7 @@ const TradePageClient: React.FC = () => {
         );
       }
     } catch (err) {
-      console.error('获取地址别名失败:', err);
+      console.error('获取交易池地址失败:', err);
     }
   };
 

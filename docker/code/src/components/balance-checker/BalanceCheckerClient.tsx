@@ -100,7 +100,7 @@ export default function BalanceCheckerClient() {
             accounts.push({
               id: mainAccount.id,
               type: 'main',
-              name: mainAccount.accountName,
+              name: mainAccount.account_name,
               address: mainAccount.address,
             });
             
@@ -114,7 +114,7 @@ export default function BalanceCheckerClient() {
                     id: derivedAccount.id,
                     type: 'derived',
                     mainAccountId: mainAccount.id,
-                    name: `∛ ${derivedAccount.accountName} (from ${mainAccount.accountName})`,
+                    name: `${derivedAccount.account_name} (from ${mainAccount.account_name})`,
                     address: derivedAccount.address,
                   });
                 }
@@ -397,10 +397,12 @@ export default function BalanceCheckerClient() {
                     onChange={(e) => handleAccountSelect(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
+                    
                     <option value="">– 选择账号 –</option>
                     {allAccounts.map((account) => (
+                      console.log(account),
                       <option key={`${account.type}-${account.id}`} value={`${account.type}-${account.id}`}>
-                         ({account.address})
+                        {account.name} - ({account.address})
                       </option>
                     ))}
                   </select>

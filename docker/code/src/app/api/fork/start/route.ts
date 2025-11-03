@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
     console.log(`生成Anvil启动命令: Block=${blockNumber}, Chain=${chainId}`);
 
     // 生成启动命令
-    const startCommand = `pkill -f "anvil --fork-url" 2>/dev/null; sleep 1; ${ANVIL_EXECUTABLE} --fork-url "${rpcUrl}" --fork-block-number ${blockNumber} --port ${forkPort} --host 0.0.0.0 --chain-id ${chainId} > output.txt 2>&1 &`;
+    //pkill -f "anvil --fork-url" 2>/dev/null; sleep 1; ~/.foundry/bin/anvil --fork-url "https://bnb-mainnet.g.alchemy.com/v2/6Dql1_Ba2rH04FbCbOcCQ" --fork-block-number 66909342 --port 8545 --host 0.0.0.0 --chain-id 56 > output.txt 2>&1 & tail -f output.txt
+    const startCommand = `pkill -f "anvil --fork-url" 2>/dev/null; sleep 1; ${ANVIL_EXECUTABLE} --fork-url "${rpcUrl}" --fork-block-number ${blockNumber} --port ${forkPort} --host 0.0.0.0 --chain-id ${chainId} > output.txt 2>&1 & tail -f output.txt`;
 
     return NextResponse.json({
       success: true,
