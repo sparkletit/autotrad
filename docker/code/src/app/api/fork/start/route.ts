@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ANVIL_EXECUTABLE = '/home/xiao/.foundry/bin/anvil';
+const ANVIL_EXECUTABLE = '~/.foundry/bin/anvil';
 const ANVIL_RPC_URL = 'http://host.docker.internal:8545';
 
 /**
