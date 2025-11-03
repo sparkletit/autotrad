@@ -8,14 +8,22 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ title = "Web3 交易平台" }) => {
-  // 初始化 API 基础 URL
+  const [isClient, setIsClient] = React.useState(false);
+
+  // 标记组件已挂载到客户端
+  React.useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // 初始化 API 基础 URL（仅在客户端）
   useEffect(() => {
+    if (!isClient) return;
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
     if (apiBaseUrl) {
       apiService.setBaseURL(apiBaseUrl);
       console.log('[API Config] Base URL:', apiBaseUrl);
     }
-  }, []);
+  }, [isClient]);
   return (
     <header className="bg-white border-b border-gray-300 sticky top-0 z-50">
       <div className="px-8 py-4 flex justify-between items-center">
