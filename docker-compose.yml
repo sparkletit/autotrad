@@ -27,7 +27,7 @@ services:
       - "${NODE_PORT:-8888}:8888"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
-      - ANVIL_RPC_URL=http://host.docker.internal:8545
+      - ANVIL_RPC_URL=${ANVIL_RPC_URL:-http://host.docker.internal:8545}
     volumes:
       - ./docker/code:/app
     working_dir: /app
