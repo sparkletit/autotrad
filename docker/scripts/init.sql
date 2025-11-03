@@ -18,10 +18,14 @@ CREATE TABLE IF NOT EXISTS custom_function_templates (
 CREATE TABLE IF NOT EXISTS custom_tokens (
   id INT AUTO_INCREMENT PRIMARY KEY,
   symbol VARCHAR(20) NOT NULL COMMENT '代币符号',
-  address VARCHAR(42) NOT NULL COMMENT '合约地址',
+  contract_address VARCHAR(42) NOT NULL COMMENT '合约地址',
   decimals INT DEFAULT 18 COMMENT '小数位数',
+  network VARCHAR(50) DEFAULT 'all' COMMENT '网络',
   name VARCHAR(100) DEFAULT NULL COMMENT '代币名称',
+  is_active TINYINT(1) DEFAULT 1 COMMENT '是否活跃',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY unique_address (address),
-  INDEX idx_symbol (symbol)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_address (contract_address),
+  INDEX idx_symbol (symbol),
+  INDEX idx_is_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='自定义代币表';

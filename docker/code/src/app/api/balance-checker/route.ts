@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
         });
 
         const tokenBalance = balance as bigint;
-        const decimals = token.decimals || 18;
+        const decimals = parseInt(String(token.decimals)) || 18;
         const formatted = formatBalance(tokenBalance, decimals);
 
         balances.push({

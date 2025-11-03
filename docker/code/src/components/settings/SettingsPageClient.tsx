@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Header from '@/components/Header';
 import Sidebar from '@/components/settings/Sidebar';
 import RPCNodeSettings from '@/components/settings/RPCNodeSettings';
 import AddressAliasSettings from '@/components/settings/AddressAliasSettings';
@@ -57,8 +58,10 @@ export default function SettingsPageClient() {
   const { title, desc } = getTitleByTab();
 
   return (
-    <div className="flex">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+    <>
+      <Header />
+      <div className="flex">
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
       <main className="flex-1 p-8 pt-8 bg-white">
         <div className="max-w-6xl mx-auto">
@@ -95,6 +98,7 @@ export default function SettingsPageClient() {
           </div>
         </div>
       </main>
-    </div>
+      </div>
+    </>
   );
 }

@@ -45,16 +45,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { symbol, address, decimals } = body;
 
-    if (!symbol || !address || decimals === undefined) {
+    if (!symbol || !address || decimals === undefined || decimals === null || decimals === '') {
       return NextResponse.json(
         { success: false, error: '缺少必要参数' },
         { status: 400 }
       );
     }
 
+    const decimalsNum = parseInt(String(decimals));
+    if (isNaN(decimalsNum) || decimalsNum < 0 || decimalsNum > 255) {
+      return NextResponse.json(
+        { success: false, error: '精度必须是0-255之间的整数' },
+        { status: 400 }
+      );
+    }
+
     const connection = await pool.getConnection();
 
-    // 检查是否已存在
+    // 检查是否已存在活跃的代币
     const [existing] = await connection.query(
       'SELECT id FROM custom_tokens WHERE contract_address = ? AND is_active = true',
       [address]
@@ -68,21 +76,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 插入新代币
-    const [result] = await connection.query(
-      'INSERT INTO custom_tokens (symbol, contract_address, decimals, network) VALUES (?, ?, ?, ?)',
-      [symbol, address, decimals, 'all']
+    // 检查是否存在已删除的同地址代币，如果存在则更新，否则插入新代币
+    const [deletedRecord] = await connection.query(
+      'SELECT id FROM custom_tokens WHERE contract_address = ? AND is_active = false',
+      [address]
     );
+
+    if (Array.isArray(deletedRecord) && deletedRecord.length > 0) {
+      // 更新已删除的记录
+      await connection.query(
+        'UPDATE custom_tokens SET symbol = ?, decimals = ?, is_active = true, updated_at = CURRENT_TIMESTAMP WHERE contract_address = ?',
+        [symbol, decimalsNum, address]
+      );
+    } else {
+      // 插入新代币
+      await connection.query(
+        'INSERT INTO custom_tokens (symbol, contract_address, decimals, network) VALUES (?, ?, ?, ?)',
+        [symbol, address, decimalsNum, 'all']
+      );
+    }
 
     connection.release();
 
     return NextResponse.json({
       success: true,
       data: {
-        id: (result as any).insertId,
         symbol,
         address,
-        decimals,
+        decimals: decimalsNum,
       },
     });
   } catch (error) {

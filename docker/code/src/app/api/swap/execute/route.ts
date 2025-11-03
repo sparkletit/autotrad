@@ -150,6 +150,15 @@ export async function POST(request: NextRequest) {
       }) as number;
     }
 
+    let decimalsOut = 18;
+    if (tokenOut !== '0x0000000000000000000000000000000000000000') {
+      decimalsOut = await publicClient.readContract({
+        address: tokenOut as Hex,
+        abi: ERC20_ABI,
+        functionName: 'decimals',
+      }) as number;
+    }
+
     // 转换输入数量
     const amountInWei = parseUnits(amountIn, decimalsIn);
     console.log('输入数量 (Wei):', amountInWei.toString());
@@ -365,8 +374,8 @@ export async function POST(request: NextRequest) {
       data: {
         txHash,
         amountIn,
-        amountOut: formatUnits(amountOutWei, decimalsIn),
-        amountOutMin: formatUnits(amountOutMin, decimalsIn),
+        amountOut: formatUnits(amountOutWei, decimalsOut),
+        amountOutMin: formatUnits(amountOutMin, decimalsOut),
         slippage: slippageNum === 0 ? 'AUTO (接受任何数量)' : `${slippageNum}%`,
         message: `成功交换 ${amountIn} 代币`,
       },
