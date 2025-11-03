@@ -1,10 +1,19 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import apiService from '@/lib/apiService';
 
 interface HeaderProps {
   title?: string;
 }
 
 const Header: React.FC<HeaderProps> = ({ title = "Web3 交易平台" }) => {
+  // 初始化 API 基础 URL
+  useEffect(() => {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+    if (apiBaseUrl) {
+      apiService.setBaseURL(apiBaseUrl);
+      console.log('[API Config] Base URL:', apiBaseUrl);
+    }
+  }, []);
   return (
     <header className="bg-white border-b border-gray-300 sticky top-0 z-50">
       <div className="px-8 py-4 flex justify-between items-center">
