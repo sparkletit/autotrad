@@ -9,6 +9,12 @@ export default function AddressBooksClient() {
   const [mainAccounts, setMainAccounts] = useState<any[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  // 标记组件已挂载到客户端，避免hydration mismatch
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // 获取主账号列表
   const fetchMainAccounts = async () => {
@@ -28,7 +34,6 @@ export default function AddressBooksClient() {
   };
 
   useEffect(() => {
-    document.title = '地址本 - Web3 交易平台';
     fetchMainAccounts();
   }, []);
 
@@ -36,6 +41,11 @@ export default function AddressBooksClient() {
     setShowCreateModal(false);
     fetchMainAccounts();
   };
+
+  // 仅在客户端挂载后才渲染内容
+  if (!isClient) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

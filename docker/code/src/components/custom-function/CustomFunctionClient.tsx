@@ -58,9 +58,14 @@ const CustomFunctionPage: React.FC = () => {
 
   const [templates, setTemplates] = useState<FunctionTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  // 标记组件已挂载到客户端
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
-    document.title = '自定义函数 - Web3 交易平台';
     fetchAccounts();
     fetchTemplates();
   }, []);

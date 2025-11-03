@@ -70,6 +70,7 @@ export default function BalanceCheckerClient() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [queriedAddress, setQueriedAddress] = useState('');
+  const [isClient, setIsClient] = useState(false);
 
   const networks = [
     { id: 'fork', name: 'Fork 网络' },
@@ -78,9 +79,14 @@ export default function BalanceCheckerClient() {
     { id: 'polygon', name: 'Polygon' },
   ];
 
-  // 页面加载时设置不标题并从数据库读取自定义代币和账号
+  // 标记组件已挂载到客户端
   useEffect(() => {
-    document.title = '余额查询 - Web3 交易平台';
+    setIsClient(true);
+  }, []);
+
+  // 页面加载时从数据库读取自定义代币和账号
+
+  useEffect(() => {
     const fetchData = async () => {
       try {
         // 获取主账号

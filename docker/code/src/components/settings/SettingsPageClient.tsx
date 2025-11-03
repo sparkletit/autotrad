@@ -14,10 +14,15 @@ export default function SettingsPageClient() {
   const [activeTab, setActiveTab] = useState('fork');
   const [isForking, setIsForking] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<string>('');
+  const [isClient, setIsClient] = useState(false);
+
+  // 标记组件已挂载到客户端，避免hydration mismatch
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // 页面挂载时初始化Fork状态
   useEffect(() => {
-    document.title = '设置 - Web3 交易平台';
     fetchInitialForkState();
   }, []);
 
@@ -57,6 +62,11 @@ export default function SettingsPageClient() {
 
   const { title, desc } = getTitleByTab();
 
+  // 仅在客户端挂载后才渲染内容
+  if (!isClient) {
+    return null;
+  }
+
   return (
     <>
       <Header />
@@ -65,7 +75,7 @@ export default function SettingsPageClient() {
       
       <main className="flex-1 p-8 pt-8 bg-white">
         <div className="max-w-6xl mx-auto">
-          {/* 页面标题 */}
+          {/* 页面标题（仅客户端动态更新） */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
             <p className="text-gray-600 mt-1">{desc}</p>
@@ -80,7 +90,7 @@ export default function SettingsPageClient() {
                 isForking={isForking}
               />
             )}
-            {activeTab === 'identity' && (
+            {activeTab === 'identity' && isClient && (
               <>
                 <IdentityConfiguration
                   onAccountSelected={(account) => setSelectedAddress(account.address)}
