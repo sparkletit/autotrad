@@ -424,8 +424,20 @@ ${data.command}
               <button
                 onClick={() => {
                   const command = error.split('\n\n')[1];
-                  if (command) {
-                    navigator.clipboard.writeText(command);
+                  if (command && navigator.clipboard) {
+                    navigator.clipboard.writeText(command).then(() => {
+                      alert('已复制命令到剪贴板');
+                    }).catch(() => {
+                      alert('复制失败，请手动复制');
+                    });
+                  } else if (command) {
+                    // Fallback: 如果 clipboard 不可用，使用 textarea 方法
+                    const textarea = document.createElement('textarea');
+                    textarea.value = command;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
                     alert('已复制命令到剪贴板');
                   }
                 }}
