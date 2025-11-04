@@ -52,9 +52,9 @@ export async function POST(request: NextRequest) {
 
     if (!tokenAddress) {
       // 转账原生代币（BNB）
-      // 使用Anvil的特殊方法：arvil_setBalance
+      // 执行真实的交易，不使用任何模拟方法
       
-      // 第1步：从发送方转出金析（减少发送方余额）
+      // 第1步：验证发送方余额是否足够
       const getFromBalanceResponse = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,58 +76,143 @@ export async function POST(request: NextRequest) {
         throw new Error('发送方余额不足');
       }
 
-      // 第2步：修改发送方余额（减少）
-      const newFromBalance = (currentBalance - amountInWei).toString(16);
-      const setFromBalanceResponse = await fetch(rpcUrl, {
+      // 第2步：获取账户的 nonce（用于交易排序）
+      const getNonceResponse = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jsonrpc: '2.0',
-          method: 'anvil_setBalance',
-          params: [fromAddress, `0x${newFromBalance}`],
+          method: 'eth_getTransactionCount',
+          params: [fromAddress, 'latest'],
           id: 2,
         }),
       });
 
-      const setFromResult = await setFromBalanceResponse.json();
-      if (setFromResult.error) {
-        throw new Error('设置发送方余额失败: ' + setFromResult.error.message);
+      const nonceResult = await getNonceResponse.json();
+      if (nonceResult.error) {
+        throw new Error('获取 nonce 失败');
       }
+      const nonce = nonceResult.result;
 
-      // 第3步：修改接收方余额（増加）
-      const getToBalanceResponse = await fetch(rpcUrl, {
+      // 第3步：获取当前 gas 价格
+      const gasPriceResponse = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jsonrpc: '2.0',
-          method: 'eth_getBalance',
-          params: [toAddress, 'latest'],
+          method: 'eth_gasPrice',
           id: 3,
         }),
       });
 
-      const toBalanceResult = await getToBalanceResponse.json();
-      const toCurrentBalance = BigInt(toBalanceResult.result || '0x0');
-      const newToBalance = (toCurrentBalance + amountInWei).toString(16);
+      const gasPriceResult = await gasPriceResponse.json();
+      if (gasPriceResult.error) {
+        throw new Error('获取 gas 价格失败');
+      }
+      const gasPrice = gasPriceResult.result;
 
-      const setToBalanceResponse = await fetch(rpcUrl, {
+      // 第3.5步：预估 gas（而不是固定值）
+      let gasLimit = '0x7530'; // 默认 30000 gas
+      try {
+        const estimateGasResponse = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_estimateGas',
+            params: [
+              {
+                from: fromAddress,
+                to: toAddress,
+                value: '0x' + amountInWei.toString(16),
+              },
+            ],
+            id: 35,
+          }),
+        });
+
+        const estimateResult = await estimateGasResponse.json();
+        if (estimateResult.result) {
+          const estimated = BigInt(estimateResult.result);
+          // 使用预估值 * 1.5 作为 gas limit
+          const gasWithBuffer = (estimated * BigInt(150)) / BigInt(100);
+          gasLimit = '0x' + gasWithBuffer.toString(16);
+          console.log(`BNB 转账 Gas 预估: ${estimated.toString()}, 实际 Gas Limit (预估*1.5): ${gasWithBuffer.toString()}`);
+        } else if (estimateResult.error) {
+          console.warn('Gas 预估失败，使用默认值 30000:', estimateResult.error);
+        }
+      } catch (err) {
+        console.warn('Gas 预估异常，使用默认值 30000:', err);
+      }
+
+      // 第4步：执行真实的转账交易
+      const txResponse = await fetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jsonrpc: '2.0',
-          method: 'anvil_setBalance',
-          params: [toAddress, `0x${newToBalance}`],
+          method: 'eth_sendTransaction',
+          params: [
+            {
+              from: fromAddress,
+              to: toAddress,
+              value: '0x' + amountInWei.toString(16),
+              gas: gasLimit, // 使用动态一估殗的 gas
+              gasPrice: gasPrice,
+              nonce: nonce,
+            },
+          ],
           id: 4,
         }),
       });
 
-      const setToResult = await setToBalanceResponse.json();
-      if (setToResult.error) {
-        throw new Error('设置接收方余额失败: ' + setToResult.error.message);
+      const txResult = await txResponse.json();
+      if (txResult.error) {
+        throw new Error(`转账交易发送失败: ${txResult.error.message}`);
       }
 
-      // 生成模拟交易哈希（Anvil 中，使用 anvil_setBalance 不会产生真实交易）
-      const txHash = '0x' + Math.random().toString(16).slice(2).padEnd(64, '0').slice(0, 64);
+      const txHash = txResult.result;
+      if (!txHash) {
+        throw new Error('无法获取交易哈希');
+      }
+
+      // 第5步：等待交易完成并获取交易回执
+      let receipt = null;
+      let retries = 0;
+      const maxRetries = 30;
+
+      while (!receipt && retries < maxRetries) {
+        const receiptResponse = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_getTransactionReceipt',
+            params: [txHash],
+            id: 5 + retries,
+          }),
+        });
+
+        const receiptResult = await receiptResponse.json();
+        if (receiptResult.result) {
+          receipt = receiptResult.result;
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          retries++;
+        }
+      }
+
+      if (!receipt) {
+        throw new Error('无法获取交易回执：交易可能未完成');
+      }
+
+      if (receipt.status === '0x0' || receipt.status === 0) {
+        throw new Error('转账交易失败：交易被 revert');
+      }
+
+      if (receipt.status !== '0x1' && receipt.status !== 1) {
+        throw new Error(`交易状态异常：${receipt.status}`);
+      }
 
       return NextResponse.json({
         success: true,

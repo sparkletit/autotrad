@@ -82,7 +82,7 @@ export async function getBalance(address: string): Promise<string> {
 
 /**
  * Mint BNB到指定地址（仅在Fork网络中有效）
- * 使用anvil的特殊方法通过JSON-RPC调用
+ * 使用anvil的特殊方法通过JSON-RPC调用直接设置余额
  */
 export async function mintETH(address: string, amount: string): Promise<string> {
   try {

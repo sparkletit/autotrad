@@ -103,13 +103,6 @@ export async function POST(request: NextRequest) {
     console.log('输出代币:', tokenOut);
     console.log('输入数量:', amountIn);
 
-    // 模拟账户
-    await fetch('http://host.docker.internal:8888/api/fork/impersonate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: account }),
-    });
-
     // 获取 Pair 信息
     const token0 = await publicClient.readContract({
       address: pairAddress as Hex,

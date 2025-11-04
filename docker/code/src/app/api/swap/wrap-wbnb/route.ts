@@ -109,19 +109,7 @@ export async function POST(request: NextRequest) {
         console.log('- BNB:', formatEther(bnbBalanceBefore));
         console.log('- WBNB:', formatEther(wbnbBalanceBefore));
 
-        // 第一步：模拟账户，使其能与上执行交易
-        const impersonateResponse = await fetch('http://host.docker.internal:8888/api/fork/impersonate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address: account }),
-        });
-
-        const impersonateData = await impersonateResponse.json();
-        if (!impersonateData.success) {
-          console.warn('模拟账户失败，继续尝试执行交易:', impersonateData.error);
-        }
-
-        // 第二步：调用 WBNB 合约的 deposit() 方法
+        // 第一步：调用 WBNB 合约的 deposit() 方法
         // deposit() 函数选择器是 0xd0e30db0（无参数）
         const data = '0xd0e30db0';
         const valueInHex = `0x${amountInWei.toString(16)}`;
@@ -189,9 +177,9 @@ export async function POST(request: NextRequest) {
         
         if (result.error) {
           console.error('交易执行错误:', result.error);
-          // 如果是 "No Signer available" 错误，提示用户
+          // 如果是 "No Signer available" 错误，说明账户不可用
           if (result.error.message && result.error.message.includes('No Signer')) {
-            throw new Error('Anvil fork 没有可用的签名者。请确保使用了正确的账户地址，或使用 anvil_impersonateAccount 模拟账户');
+            throw new Error('账户不可用。请确保使用了正确的账户地址，该账户必须有足够的 BNB 余额');
           }
           throw new Error(result.error.message || '执行交易失败');
         }

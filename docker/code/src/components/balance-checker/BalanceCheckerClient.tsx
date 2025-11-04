@@ -400,7 +400,6 @@ export default function BalanceCheckerClient() {
                     
                     <option value="">– 选择账号 –</option>
                     {allAccounts.map((account) => (
-                      console.log(account),
                       <option key={`${account.type}-${account.id}`} value={`${account.type}-${account.id}`}>
                         {account.name} - ({account.address})
                       </option>
