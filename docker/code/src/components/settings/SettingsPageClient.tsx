@@ -98,7 +98,7 @@ export default function SettingsPageClient() {
                 {selectedAddress && (
                   <>
                     <MintFunction selectedAddress={selectedAddress} isForkActive={isForking} />
-                    <AccountAssets address={selectedAddress} />
+                   
                   </>
                 )}
               </>

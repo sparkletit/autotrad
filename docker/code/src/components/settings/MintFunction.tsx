@@ -39,7 +39,7 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
         // 使用与 ForkNetworkConfig 相同的检查方法：直接检测 RPC 是否响应
         const statusResponse = await fetch('/api/fork/status');
         const statusData = await statusResponse.json();
-        console.log('Fork status check result:', statusData);
+        //console.log('Fork status check result:', statusData);
         if (statusData.success) {
           setRealForkStatus(statusData.isRunning || false);
         }
@@ -175,7 +175,7 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-bold mb-6 text-gray-900">Mint主网资产到Fork</h2>
-      <p className="text-sm text-gray-600 mb-6">不兹人设定明细的账户和需要Mint的资产类型</p>
+      <p className="text-sm text-gray-600 mb-6">需要设定明细的账户和需要Mint的资产类型</p>
 
       {/* 账号信息 */}
       <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded">
@@ -188,7 +188,7 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
         <h3 className="text-sm font-medium text-gray-900 mb-3">钱包余额</h3>
         <div className="space-y-2">
           {balances.length > 0 ? (
-            balances.map((balance) => (
+            balances.map((balance) => (              
               <div key={balance.token} className="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-200">
                 <span className="text-sm font-medium text-gray-900">{balance.token}</span>
                 <div className="text-right">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { mintETH, getBalance, getSupportedTokens, getAccountBalances } from '@/lib/mintService';
+import { formatBalance } from '@/lib/apiService';
 
 /**
  * GET /api/fork/mint
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     // 获取更新后的余额
     const balance = await getBalance(address);
-    const formatted = (BigInt(balance) / BigInt(10 ** 18)).toString();
+    const formatted = formatBalance(BigInt(balance), 18);
 
     return NextResponse.json({
       success: true,

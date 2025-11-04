@@ -6,6 +6,7 @@ import {
   Hex,
 } from 'viem';
 import { forkManager } from './forkService';
+import { formatBalance } from './apiService';
 
 // BNB链资产配置
 const MAINNET_TOKENS = {
@@ -25,7 +26,7 @@ const MAINNET_TOKENS = {
     name: 'USD Coin',
     symbol: 'USDC',
     decimals: 18,
-    address: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', // BNB Chain USDC
+    address: '0x8ac76a51cc950d984780bafc599bd69add087d56', // BNB Chain USDC
   },
   BUSD: {
     name: 'Binance USD',
@@ -132,7 +133,7 @@ export async function getAccountBalances(addressParam: string): Promise<WalletBa
 
     // 获取BNB余额（原生资产）
     const bnbBalance = await getBalance(addressParam);
-    const bnbFormatted = (BigInt(bnbBalance) / BigInt(10 ** 18)).toString();
+    const bnbFormatted = formatBalance(BigInt(bnbBalance), 18);
     balances.push({
       token: 'BNB',
       balance: bnbBalance,

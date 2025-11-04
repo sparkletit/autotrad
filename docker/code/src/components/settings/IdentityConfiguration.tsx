@@ -154,42 +154,24 @@ export default function IdentityConfiguration({ onAccountSelected }: IdentityCon
             </div>
           )}
 
-          {/* 派生账号列表 */}
+          {/* 派生账号下拉框 */}
           {selectedMainAccountId && (derivedAccounts || []).length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
-                派生账号列表
+                派生账号
               </label>
-              <div className="space-y-2">
+              <select
+                value={selectedAccountAddress || ''}
+                onChange={(e) => handleSelectAccount(e.target.value, false)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- 选择派生账号 --</option>
                 {(derivedAccounts || []).map((account) => (
-                  <div
-                    key={account.id}
-                    className={`p-3 border rounded cursor-pointer transition-colors ${
-                      selectedAccountAddress === account.address
-                        ? 'bg-blue-50 border-blue-500'
-                        : 'bg-gray-50 border-gray-300 hover:bg-gray-100'
-                    }`}
-                    onClick={() => handleSelectAccount(account.address, false)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {account.account_name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          路径: {account.derivation_path}
-                        </p>
-                        <p className="text-xs text-gray-600 break-all font-mono mt-1">
-                          {account.address}
-                        </p>
-                      </div>
-                      {selectedAccountAddress === account.address && (
-                        <span className="text-blue-600 font-bold">✓</span>
-                      )}
-                    </div>
-                  </div>
+                  <option key={account.id} value={account.address} className="text-gray-900">
+                    {account.account_name} ({account.address})
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
           )}
 

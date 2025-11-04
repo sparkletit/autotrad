@@ -32,25 +32,7 @@ export async function GET(
         name: 'Binance Coin',
         decimals: 18,
         contractAddress: null,
-      },
-      {
-        symbol: 'USDT',
-        name: 'Tether USD',
-        decimals: 18,
-        contractAddress: '0x55d398326f99059fF775485246999027B3197955',
-      },
-      {
-        symbol: 'USDC',
-        name: 'USD Coin',
-        decimals: 18,
-        contractAddress: '0x8AC76a51cc950d9822D68b83FE1Ad97B32Cd580d',
-      },
-      {
-        symbol: 'BUSD',
-        name: 'Binance USD',
-        decimals: 18,
-        contractAddress: '0xe9e7cea3dedca5984780bafc599bd69add087d56',
-      },
+      }
     ];
 
     // 获取BNB余额
@@ -66,33 +48,7 @@ export async function GET(
         decimals: 18,
         contractAddress: null,
         formatted: (BigInt(bnbBalance) / BigInt(10 ** 18)).toString(),
-      },
-      // TODO: 添加ERC20余额查询
-      // 对于ERC20代币，需要调用balanceOf函数
-      {
-        symbol: 'USDT',
-        name: 'Tether USD',
-        balance: '0',
-        decimals: 18,
-        contractAddress: '0x55d398326f99059fF775485246999027B3197955',
-        formatted: '0',
-      },
-      {
-        symbol: 'USDC',
-        name: 'USD Coin',
-        balance: '0',
-        decimals: 18,
-        contractAddress: '0x8AC76a51cc950d9822D68b83FE1Ad97B32Cd580d',
-        formatted: '0',
-      },
-      {
-        symbol: 'BUSD',
-        name: 'Binance USD',
-        balance: '0',
-        decimals: 18,
-        contractAddress: '0xe9e7cea3dedca5984780bafc599bd69add087d56',
-        formatted: '0',
-      },
+      }
     ];
 
     return NextResponse.json({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, Hex } from 'viem';
+import { formatBalance } from '@/lib/apiService';
 
 /**
  * GET /api/accounts/[address]/balance
@@ -29,7 +30,7 @@ export async function GET(
       address: address as Hex,
     });
 
-    const formatted = (BigInt(balance) / BigInt(10 ** 18)).toString();
+   const formatted = formatBalance(BigInt(balance), 18);
 
     return NextResponse.json({
       success: true,
