@@ -153,6 +153,8 @@ const SwapPageClient: React.FC = () => {
     try {
       setLoadingReserves(true);
       setError('');
+      // 清除旧的储备数据
+      setPairReserves(null);
       
       const response = await fetch('/api/swap/get-reserves', {
         method: 'POST',
@@ -161,6 +163,8 @@ const SwapPageClient: React.FC = () => {
           pairAddress,
           network: selectedNetwork,
         }),
+        // 禁用浏览器缓存
+        cache: 'no-store',
       });
 
       const data = await response.json();
@@ -171,9 +175,12 @@ const SwapPageClient: React.FC = () => {
         setTimeout(() => setSuccess(''), 2000);
       } else {
         setError(data.error || '查询储备失败');
+        // 保持储备状态为 null，不显示旧的数据
+        setPairReserves(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '查询储备失败');
+      setPairReserves(null);
     } finally {
       setLoadingReserves(false);
     }
