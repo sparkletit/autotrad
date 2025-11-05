@@ -61,6 +61,7 @@ const CustomFunctionPage: React.FC = () => {
   const [templates, setTemplates] = useState<FunctionTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState<FunctionTemplate | null>(null);
 
   // 标记组件已挂载到客户端
   useEffect(() => {
@@ -73,6 +74,11 @@ const CustomFunctionPage: React.FC = () => {
       setAccounts(allAccounts);
     };
     loadAccounts();
+  }, []);
+
+  // 页面加载时获取模板列表
+  useEffect(() => {
+    fetchTemplates();
   }, []);
 
   // 解析ABI
@@ -94,19 +100,23 @@ const CustomFunctionPage: React.FC = () => {
     }
   }, [abiContent]);
 
-  // 当选择函数时，初始化参数
+  // 当ABI内容更新时，如果有待加载的模板，则继续加载
   useEffect(() => {
-    if (selectedFunction) {
-      const func = parsedABI.find((f) => f.name === selectedFunction);
-      if (func && func.inputs) {
-        const params: any = {};
-        func.inputs.forEach((input, index) => {
-          params[input.name || `param${index}`] = '';
-        });
-        setFunctionParams(params);
+    if (pendingTemplate && parsedABI.length > 0) {
+      // ABI已解析完成，现在设置函数和参数
+      const func = parsedABI.find((f) => f.name === pendingTemplate.function_name);
+      if (func) {
+        setSelectedFunction(pendingTemplate.function_name);
+        try {
+          const params = JSON.parse(pendingTemplate.params_json);
+          setFunctionParams(params);
+        } catch (e) {
+          console.error('解析参数失败:', e);
+        }
       }
+      setPendingTemplate(null);
     }
-  }, [selectedFunction, parsedABI]);
+  }, [parsedABI, pendingTemplate]);
 
 
 
@@ -223,15 +233,11 @@ const CustomFunctionPage: React.FC = () => {
   const handleLoadTemplate = (template: FunctionTemplate) => {
     setSelectedAccount(template.account_address);
     setContractAddress(template.contract_address);
-    setAbiContent(template.abi_content);
-    setSelectedFunction(template.function_name);
     setDescription(template.description || '');
-    try {
-      const params = JSON.parse(template.params_json);
-      setFunctionParams(params);
-    } catch (e) {
-      console.error('解析参数失败:', e);
-    }
+    // 先设置待死模板，然后设置ABI
+    // 当ABI加载完成后，会自动触发useEffect来加载函数和参数
+    setPendingTemplate(template);
+    setAbiContent(template.abi_content);
   };
 
   const handleDeleteTemplate = async (id: number) => {

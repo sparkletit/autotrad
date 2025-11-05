@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import pool from '@/lib/db';
 
 // 辅助函数：将对象中的 BigInt 转换为字符串
 function convertBigIntToString(obj: any): any {
@@ -60,7 +61,43 @@ export async function POST(request: NextRequest) {
     // 连接到Fork网络
     const provider = new ethers.JsonRpcProvider('http://host.docker.internal:8545');
     
-    const signer = await provider.getSigner(account_address);
+    // 验证账户是否存在且有效
+    try {
+      const balance = await provider.getBalance(account_address);
+      console.log(`账户 ${account_address} 的余额: ${balance.toString()}`);
+    } catch (e) {
+      return NextResponse.json(
+        { success: false, error: `无效的账户地址: ${account_address}` },
+        { status: 400 }
+      );
+    }
+    
+    // 从数据库中获取账户的私钥
+    let signer;
+    try {
+      const [rows] = await pool.query(
+        'SELECT private_key FROM main_accounts WHERE address = ? LIMIT 1',
+        [account_address.toLowerCase()]
+      );
+      
+      if (rows && Array.isArray(rows) && rows.length > 0) {
+        const privateKey = (rows[0] as any).private_key;
+        if (privateKey) {
+          signer = new ethers.Wallet(privateKey, provider);
+          console.log(`使用数据库中的私钥创建 signer: ${signer.address}`);
+        } else {
+          throw new Error('账户在数据库中没有私钥');
+        }
+      } else {
+        throw new Error(`数据库中找不到账户 ${account_address}`);
+      }
+    } catch (dbError: any) {
+      console.error('从数据库获取私钥失败:', dbError);
+      return NextResponse.json(
+        { success: false, error: `无法为账户 ${account_address} 创建 signer: ${dbError.message}` },
+        { status: 400 }
+      );
+    }
     
     // 创建合约实例
     const contract = new ethers.Contract(contract_address, abiArray, signer);

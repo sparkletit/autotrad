@@ -87,7 +87,7 @@ const TokenManagementWidget: React.FC<TokenManagementWidgetProps> = ({ isOpen, o
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="bg-black bg-opacity-50 absolute inset-0" onClick={handleClose} />
+      <div className="absolute inset-0 backdrop-blur-sm" onClick={handleClose} />
       <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4 relative z-50">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">🏪 代币管理</h2>
         

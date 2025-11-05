@@ -48,7 +48,7 @@ const WidgetTrigger: React.FC<WidgetTriggerProps> = ({ onTrigger, className = ''
       {/* 背景遮罩 */}
       {isExpanded && (
         <div
-          className="fixed inset-0 z-40 bg-black bg-opacity-20"
+          className="fixed inset-0 z-40 bg-opacity-20"
           onClick={() => setIsExpanded(false)}
         />
       )}
