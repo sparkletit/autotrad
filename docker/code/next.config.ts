@@ -7,14 +7,6 @@ const nextConfig: NextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 5,
   },
-  // 禁用 hydration mismatch 相关的警告
-  experimental: {
-    // NextJS 13+ 的日志级别配置
-  },
-  webpack: (config: any, { isServer }: any) => {
-    // 可以在这里添加额外的 webpack 配置
-    return config;
-  },
 };
 
 export default nextConfig;
