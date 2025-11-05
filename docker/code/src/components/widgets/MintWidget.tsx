@@ -129,6 +129,13 @@ const MintWidget: React.FC<MintWidgetProps> = ({ isOpen, onClose, onSuccess }) =
               >
                 10000
               </button>
+              <button
+                onClick={() => setMintAmount('100000')}
+                className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors"
+                disabled={loading}
+              >
+                100000
+              </button>  
             </div>
           </div>
         </div>

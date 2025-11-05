@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
-import { fetchCustomTokens, fetchAddressAliases, fetchTokenBalances } from '@/lib/addressService';
+import { fetchCustomTokens, fetchAddressAliases, fetchTokenBalances, type CustomToken } from '@/lib/addressService';
 
 interface ChainInfo {
   chainId: number;
@@ -40,7 +40,7 @@ const TradePageClient: React.FC = () => {
   const [addressAliases, setAddressAliases] = useState<AddressEntry[]>([]);
   
   const [fromAddress, setFromAddress] = useState('');
-  const [customTokens, setCustomTokens] = useState<Array<{ symbol: string; address: string; decimals?: number }>>([]);
+  const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
   
@@ -65,23 +65,27 @@ const TradePageClient: React.FC = () => {
   ];
 
   // 过滤代币根据搜索关键字
-  const filteredTokens = [
-    { symbol: 'BNB', address: null },
-    ...customTokens.map(token => ({
-      symbol: token.symbol,
-      address: token.address,
-    })),
-  ].filter((token) =>
-    token.symbol.toLowerCase().includes(tokenSearchKeyword.toLowerCase())
-  );
+  const allTokensForFilter: any[] = [{ symbol: 'BNB', address: null }, ...customTokens];
+  const filteredTokens = allTokensForFilter.filter((tok: any) => {
+    const tokenSym = tok && tok.symbol ? String(tok.symbol) : '';
+    const searchKey = String(tokenSearchKeyword);
+    return tokenSym.toLocaleLowerCase().includes(searchKey.toLocaleLowerCase());
+  });
+
+  // 初始化：获取代币列表
+  useEffect(() => {
+    const loadTokens = async () => {
+      const tokens = await fetchCustomTokens();
+      setCustomTokens(tokens);
+    };
+    loadTokens();
+  }, []);
 
   useEffect(() => {
     fetchChainInfo();
     const interval = setInterval(fetchChainInfo, 5000);
     return () => clearInterval(interval);
   }, [selectedNetwork]);
-
-
 
   useEffect(() => {
     if (fromAddress) {

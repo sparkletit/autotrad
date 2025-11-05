@@ -15,28 +15,28 @@ const WidgetTrigger: React.FC<WidgetTriggerProps> = ({ onTrigger, className = ''
   const widgets = [
     {
       id: 'mint' as WidgetType,
-      label: '💰 Mint资产',
+      label: 'Mint资产',
       description: '将主网资产Mint到Fork',
       icon: '💰',
       color: 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200',
     },
     {
       id: 'wrap-wbnb' as WidgetType,
-      label: '📦 包装WBNB',
+      label: '包装WBNB',
       description: '将BNB包装为WBNB',
       icon: '📦',
       color: 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200',
     },
     {
       id: 'token-management' as WidgetType,
-      label: '🏪 代币管理',
+      label: '代币管理',
       description: '添加/删除自定义代币',
       icon: '🏪',
       color: 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200',
     },
     {
       id: 'swap-pool' as WidgetType,
-      label: '🔄 交易池',
+      label: '交易池',
       description: '查看和配置交易池',
       icon: '🔄',
       color: 'bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200',

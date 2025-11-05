@@ -133,6 +133,34 @@ const WrapWBNBWidget: React.FC<WrapWBNBWidgetProps> = ({ isOpen, onClose, onSucc
               >
                 10
               </button>
+              <button
+                onClick={() => setAmount('100')}
+                className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors"
+                disabled={loading}
+              >
+                100
+              </button>
+              <button
+                onClick={() => setAmount('1000')}
+                className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors"
+                disabled={loading}
+              >
+                1000
+              </button>
+              <button
+                onClick={() => setAmount('10000')}
+                className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors"
+                disabled={loading}
+              >
+                10000
+              </button>
+              <button
+                onClick={() => setAmount('100000')}
+                className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors"
+                disabled={loading}
+              >
+                100000
+              </button>
             </div>
           </div>
         </div>
