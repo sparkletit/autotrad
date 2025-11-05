@@ -179,7 +179,7 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
       const accountMatch = accounts.find((a) => a.address.toLowerCase() === value.toLowerCase());
       if (accountMatch) {
         setSelectedLabel(
-          `${accountMatch.account_name} (${accountMatch.address.slice(0, 6)}...${accountMatch.address.slice(-4)})`
+          `${accountMatch.account_name.toUpperCase()} (${accountMatch.address.slice(0, 6)}...${accountMatch.address.slice(-4)})`
         );
         return;
       }
@@ -263,7 +263,7 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
         <div
           key={`account-${idx}`}
           onClick={() => {
-            onChange(acc.address, acc.account_name);
+            onChange(acc.address, acc.account_name.toUpperCase());
             setIsOpen(false);
             setSearchText('');
           }}
@@ -273,7 +273,6 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
         >
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-gray-900 truncate">{acc.account_name}</div>
               <div className="text-xs text-gray-500 font-mono mt-1">{acc.address}</div>
             </div>
             {value.toLowerCase() === acc.address.toLowerCase() && (
@@ -281,7 +280,7 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
             )}
           </div>
           {acc.type === 'derived' && (
-            <div className="text-xs text-orange-500 mt-1">∛ 派生账户</div>
+            <div className="text-xs text-orange-500 mt-1">派生账户（{acc.account_name.toUpperCase()}）</div>
           )}
         </div>
       ));
@@ -290,7 +289,7 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
         <div
           key={`alias-${idx}`}
           onClick={() => {
-            onChange(alias.address, alias.alias);
+            onChange(alias.address, alias.alias.toUpperCase());
             setIsOpen(false);
             setSearchText('');
           }}
@@ -300,7 +299,7 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
         >
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-gray-900 truncate">{alias.alias}</div>
+              <div className="font-medium text-gray-900 truncate">{alias.alias.toUpperCase()}</div>
               <div className="text-xs text-gray-500 font-mono mt-1">{alias.address}</div>
             </div>
             {value.toLowerCase() === alias.address.toLowerCase() && (
