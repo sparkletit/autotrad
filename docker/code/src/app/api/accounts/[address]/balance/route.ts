@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, Hex } from 'viem';
-import { formatBalance } from '@/lib/apiService';
+import { formatBalance } from '@/lib/utils';
 
 /**
  * GET /api/accounts/[address]/balance

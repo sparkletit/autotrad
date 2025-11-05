@@ -3,33 +3,6 @@
  * 统一所有API调用，支持全局错误处理和请求拦截
  */
 
-/**
- * 格式化余额，保留小数后5位
- * @param balance 余额（Wei 或最小单位）
- * @param decimals 代币小数位数
- * @returns 格式化后的余额字符串，保留5位小数
- */
-export function formatBalance(balance: bigint, decimals: number): string {
-  const divisor = BigInt(10 ** decimals);
-  const integerPart = balance / divisor;
-  const remainderPart = balance % divisor;
-  
-  // 计算小数部分
-  const remainderStr = remainderPart.toString().padStart(decimals, '0');
-  // 只保留前5位小数
-  const decimalPart = remainderStr.substring(0, 5).padEnd(5, '0');
-  
-  // 移除尾部的零
-  const decimalPartTrimmed = decimalPart.replace(/0+$/, '');
-  
-  // 如果没有小数部分，只返回整数部分
-  if (decimalPartTrimmed.length === 0) {
-    return integerPart.toString();
-  }
-  
-  return `${integerPart}.${decimalPartTrimmed}`;
-}
-
 interface ApiResponse<T> {
   success: boolean;
   data?: T;

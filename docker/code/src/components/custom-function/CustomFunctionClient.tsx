@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
+import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
+import { fetchAllAccounts } from '@/lib/addressService';
 
 interface Account {
   id: number;
@@ -66,8 +68,11 @@ const CustomFunctionPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchAccounts();
-    fetchTemplates();
+    const loadAccounts = async () => {
+      const allAccounts = await fetchAllAccounts();
+      setAccounts(allAccounts);
+    };
+    loadAccounts();
   }, []);
 
   // 解析ABI
@@ -103,17 +108,7 @@ const CustomFunctionPage: React.FC = () => {
     }
   }, [selectedFunction, parsedABI]);
 
-  const fetchAccounts = async () => {
-    try {
-      const response = await fetch('/api/accounts/all');
-      const data = await response.json();
-      if (data.success) {
-        setAccounts(data.data || []);
-      }
-    } catch (err) {
-      console.error('获取账户列表失败:', err);
-    }
-  };
+
 
   const fetchTemplates = async () => {
     try {
@@ -296,18 +291,11 @@ const CustomFunctionPage: React.FC = () => {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     发送交易的账户 *
                   </label>
-                  <select
+                  <UnifiedAddressSelector
                     value={selectedAccount}
-                    onChange={(e) => setSelectedAccount(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">-- 选择账户 --</option>
-                    {accounts.map((account) => (
-                      <option key={`${account.type}-${account.id}`} value={account.address}>
-                        {account.account_name} ({account.address})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedAccount}
+                    placeholder="搜索或选择账户..."
+                  />
                 </div>
 
                 {/* 合约地址 */}
@@ -315,12 +303,10 @@ const CustomFunctionPage: React.FC = () => {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     合约地址 *
                   </label>
-                  <input
-                    type="text"
+                  <UnifiedAddressSelector
                     value={contractAddress}
-                    onChange={(e) => setContractAddress(e.target.value)}
-                    placeholder="0x..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={setContractAddress}
+                    placeholder="搜索或选择合约地址..."
                   />
                 </div>
 

@@ -9,6 +9,7 @@ import ForkNetworkConfig from '@/components/settings/ForkNetworkConfig';
 import IdentityConfiguration from '@/components/settings/IdentityConfiguration';
 import MintFunction from '@/components/settings/MintFunction';
 import AccountAssets from '@/components/settings/AccountAssets';
+import TokenManagement from '@/components/settings/TokenManagement';
 
 export default function SettingsPageClient() {
   const [activeTab, setActiveTab] = useState('fork');
@@ -19,7 +20,19 @@ export default function SettingsPageClient() {
   // 标记组件已挂载到客户端，避免hydration mismatch
   useEffect(() => {
     setIsClient(true);
+    // 从localStorage恢复之前选择的标签页
+    const savedTab = localStorage.getItem('settingsActiveTab');
+    if (savedTab) {
+      setActiveTab(savedTab);
+    }
   }, []);
+
+  // 当activeTab变化时，保存到localStorage
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('settingsActiveTab', activeTab);
+    }
+  }, [activeTab, isClient]);
 
   // 页面挂载时初始化Fork状态
   useEffect(() => {
@@ -56,6 +69,7 @@ export default function SettingsPageClient() {
       identity: { title: '用户身份配置', desc: '自定义您的交易身份和偏好设置' },
       rpc: { title: 'RPC 节点配置', desc: '管理您的 RPC 节点连接' },
       address: { title: '交易池地址', desc: '管理您的交易池地址' },
+      tokens: { title: '代币管理', desc: '管理自定义代币列表' },
     };
     return titles[activeTab] || titles.fork;
   };
@@ -105,6 +119,7 @@ export default function SettingsPageClient() {
             )}
             {activeTab === 'rpc' && <RPCNodeSettings />}
             {activeTab === 'address' && <AddressAliasSettings />}
+            {activeTab === 'tokens' && <TokenManagement />}
           </div>
         </div>
       </main>

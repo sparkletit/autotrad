@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Metadata } from 'next';
-import TradePageClient from '@/components/trade/TradePageClient';
+import TradePageWrapper from '@/components/pages/TradePageWrapper';
 
 export const metadata: Metadata = {
   title: '交易 - Web3 交易平台',
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function TradePage() {
-  return <TradePageClient />;
+  return <TradePageWrapper />;
 }

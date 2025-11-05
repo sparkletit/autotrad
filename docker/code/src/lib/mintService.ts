@@ -6,7 +6,7 @@ import {
   Hex,
 } from 'viem';
 import { forkManager } from './forkService';
-import { formatBalance } from './apiService';
+import { formatBalance } from './utils';
 
 // BNB链资产配置
 const MAINNET_TOKENS = {

@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
+import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
+import { fetchCustomTokens, fetchAddressAliases, fetchTokenBalances } from '@/lib/addressService';
 
 interface ChainInfo {
   chainId: number;
@@ -79,35 +81,18 @@ const TradePageClient: React.FC = () => {
     return () => clearInterval(interval);
   }, [selectedNetwork]);
 
-  // 从数据库加载自定义代币
-  useEffect(() => {
-    const fetchCustomTokens = async () => {
-      try {
-        const response = await fetch('/api/custom-tokens');
-        const data = await response.json();
-        if (data.success) {
-          setCustomTokens(data.data.map((t: any) => ({
-            symbol: t.symbol,
-            address: t.contract_address || t.address,
-            decimals: t.decimals || 18,
-          })));
-        }
-      } catch (err) {
-        console.error('加载自定义代币失败:', err);
-      }
-    };
-    fetchCustomTokens();
-  }, []);
 
-  useEffect(() => {
-    fetchAccounts();
-    fetchAddressAliases();
-  }, []);
 
   useEffect(() => {
     if (fromAddress) {
-      fetchTokenBalances(fromAddress);
-      setSelectedToken('BNB');
+      const loadBalances = async () => {
+        setBalancesLoading(true);
+        const balances = await fetchTokenBalances(fromAddress);
+        setTokenBalances(balances);
+        setSelectedToken('BNB');
+        setBalancesLoading(false);
+      };
+      loadBalances();
     }
   }, [fromAddress]);
 
@@ -138,53 +123,9 @@ const TradePageClient: React.FC = () => {
     }
   };
 
-  const fetchAccounts = async () => {
-    try {
-      const response = await fetch('/api/accounts/all');
-      const data = await response.json();
-      if (data.success) {
-        setAccounts(data.data || []);
-      }
-    } catch (err) {
-      console.error('获取账户列表失败:', err);
-    }
-  };
 
-  const fetchAddressAliases = async () => {
-    try {
-      const response = await fetch('/api/address-aliases');
-      const data = await response.json();
-      if (data.success) {
-        setAddressAliases(
-          data.data.map((item: any) => ({
-            id: item.id,
-            alias: item.alias,
-            address: item.address,
-          }))
-        );
-      }
-    } catch (err) {
-      console.error('获取交易池地址失败:', err);
-    }
-  };
 
-  const fetchTokenBalances = async (address: string) => {
-    try {
-      setBalancesLoading(true);
-      const response = await fetch(`/api/accounts/${address}/balances`);
-      const data = await response.json();
-      if (data.success) {
-        setTokenBalances(data.data || []);
-      } else {
-        setTokenBalances([]);
-      }
-    } catch (err) {
-      console.error('获取代币余额失败:', err);
-      setTokenBalances([]);
-    } finally {
-      setBalancesLoading(false);
-    }
-  };
+
 
   const getSelectedTokenBalance = (): TokenBalance | undefined => {
     const found = tokenBalances.find((t) => t.symbol === selectedToken);
@@ -205,34 +146,7 @@ const TradePageClient: React.FC = () => {
     return undefined;
   };
 
-  const getReceivingAddressOptions = () => {
-    const options = [];
-    let optionIndex = 0;
-    
-    for (const account of accounts) {
-      options.push({
-        type: 'account',
-        id: account.id,
-        label: `${account.account_name} (${account.address})`,
-        value: account.address,
-        uniqueKey: `account-${optionIndex}`,
-      });
-      optionIndex++;
-    }
-    
-    for (const alias of addressAliases) {
-      options.push({
-        type: 'alias',
-        id: alias.id,
-        label: `${alias.alias} (${alias.address})`,
-        value: alias.address,
-        uniqueKey: `alias-${optionIndex}`,
-      });
-      optionIndex++;
-    }
-    
-    return options;
-  };
+
 
   const handleTransfer = async () => {
     if (!fromAddress || !toAddress || !amount) {
@@ -285,7 +199,8 @@ const TradePageClient: React.FC = () => {
         setTxHash(data.txHash);
         setToAddress('');
         setAmount('');
-        await fetchTokenBalances(fromAddress);
+        const balances = await fetchTokenBalances(fromAddress);
+        setTokenBalances(balances);
       } else {
         setError(data.error || '转账失败');
       }
@@ -350,7 +265,7 @@ const TradePageClient: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1">
             {/* 左侧：转账表单 */}
             <div className="col-span-2">
               <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
@@ -380,21 +295,14 @@ const TradePageClient: React.FC = () => {
                   <label className="block text-sm font-semibold text-gray-900 mb-3">
                     发送方账户 *
                   </label>
-                  <select
+                  <UnifiedAddressSelector
                     value={fromAddress}
-                    onChange={(e) => setFromAddress(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
-                  >
-                    <option value="">-- 选择发送方账户 --</option>
-                    {accounts.map((account) => (
-                      <option key={`${account.type}-${account.id}`} value={account.address}>
-                        {account.account_name} ({account.address})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setFromAddress}
+                    placeholder="搜索或选择发送账户..."
+                  />
 
                   {fromAddress && (
-                    <div className="space-y-2">
+                    <div className="space-y-2 mt-3">
                       <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <p className="text-xs text-blue-600 mb-1">账户地址</p>
                         <p className="text-sm font-mono text-blue-900 break-all">{fromAddress}</p>
@@ -471,28 +379,11 @@ const TradePageClient: React.FC = () => {
                   <label className="block text-sm font-semibold text-gray-900 mb-3">
                     接收方账户 *
                   </label>
-                  <select
+                  <UnifiedAddressSelector
                     value={toAddress}
-                    onChange={(e) => setToAddress(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
-                  >
-                    <option value="">-- 选择或输入接收方 --</option>
-                    {getReceivingAddressOptions().map((option) => (
-                      <option key={option.uniqueKey} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="或输入钱包地址（0x开头）"
-                      value={toAddress}
-                      onChange={(e) => setToAddress(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                    onChange={setToAddress}
+                    placeholder="搜索或选择接收账户..."
+                  />
                 </div>
 
                 {/* 转账数量 */}
@@ -523,45 +414,6 @@ const TradePageClient: React.FC = () => {
             </div>
 
             {/* 右侧：说明 */}
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">使用说明</h3>
-                <div className="space-y-3 text-sm text-gray-700">
-                  <div className="flex gap-3">
-                    <span className="text-blue-500 font-bold">1</span>
-                    <p>选择发送方账户</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="text-blue-500 font-bold">2</span>
-                    <p>选择转账代币</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="text-blue-500 font-bold">3</span>
-                    <p>选择或输入接收方地址</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="text-blue-500 font-bold">4</span>
-                    <p>输入转账数量</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="text-blue-500 font-bold">5</span>
-                    <p>点击"确认转账"执行</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">网络状态</h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">当前网络:</span>
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
-                      {networks.find((n) => n.id === selectedNetwork)?.name}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

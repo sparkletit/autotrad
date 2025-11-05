@@ -75,11 +75,20 @@ export async function POST(request: NextRequest) {
     // 检查账户 BNB 余额
     const bnbBalance = await publicClient.getBalance({ address: account as Hex });
     
+    console.log('余额检查信息:');
+    console.log('- 账户:', account);
+    console.log('- 需要金额 (Wei):', amountInWei.toString());
+    console.log('- 当前余额 (Wei):', bnbBalance.toString());
+    console.log('- 当前余额 (BNB):', formatEther(bnbBalance));
+    console.log('- 需要金额 (BNB):', amount);
+    
     if (bnbBalance < amountInWei) {
+      const errorMsg = `账户余额不足。当前余额: ${formatEther(bnbBalance)} BNB，需要: ${amount} BNB。\n\n如果您已使用Mint资产功能，余额可能在Anvil中未更新，请稍后重试或刷新页面。`;
+      console.error(errorMsg);
       return NextResponse.json(
         {
           success: false,
-          error: `账户余额不足。当前余额: ${formatEther(bnbBalance)} BNB，需要: ${amount} BNB`,
+          error: errorMsg,
         },
         { status: 400 }
       );
@@ -109,7 +118,26 @@ export async function POST(request: NextRequest) {
         console.log('- BNB:', formatEther(bnbBalanceBefore));
         console.log('- WBNB:', formatEther(wbnbBalanceBefore));
 
-        // 第一步：调用 WBNB 合约的 deposit() 方法
+        // 第一步：使用 anvil_impersonateAccount 为该账户启用签名
+        console.log('为账户启用签名权限...');
+        const impersonateResponse = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'anvil_impersonateAccount',
+            params: [account],
+            id: 1,
+          }),
+        });
+        const impersonateResult = await impersonateResponse.json();
+        if (impersonateResult.error) {
+          console.warn('impersonate 账户失败:', impersonateResult.error);
+        } else {
+          console.log('账户已启用签名权限');
+        }
+
+        // 第二步：调用 WBNB 合约的 deposit() 方法
         // deposit() 函数选择器是 0xd0e30db0（无参数）
         const data = '0xd0e30db0';
         const valueInHex = `0x${amountInWei.toString(16)}`;
@@ -179,7 +207,7 @@ export async function POST(request: NextRequest) {
           console.error('交易执行错误:', result.error);
           // 如果是 "No Signer available" 错误，说明账户不可用
           if (result.error.message && result.error.message.includes('No Signer')) {
-            throw new Error('账户不可用。请确保使用了正确的账户地址，该账户必须有足够的 BNB 余额');
+            throw new Error('账户不可用。该账户需要先通过 Mint 资产功能进行初始化。');
           }
           throw new Error(result.error.message || '执行交易失败');
         }
@@ -227,6 +255,25 @@ export async function POST(request: NextRequest) {
         console.log('余额变化:');
         console.log('- BNB 减少:', formatEther(bnbBalanceBefore - bnbBalanceAfter));
         console.log('- WBNB 增加:', formatEther(wbnbBalanceAfter - wbnbBalanceBefore));
+
+        // 第三步：停止 impersonate
+        console.log('停止账户签名...');
+        const stopImpersonateResponse = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'anvil_stopImpersonatingAccount',
+            params: [account],
+            id: 1,
+          }),
+        });
+        const stopImpersonateResult = await stopImpersonateResponse.json();
+        if (stopImpersonateResult.error) {
+          console.warn('停止 impersonate 失败:', stopImpersonateResult.error);
+        } else {
+          console.log('账户签名权限已取消');
+        }
 
         return NextResponse.json({
           success: true,

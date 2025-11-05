@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Metadata } from 'next';
-import SettingsPageClient from '@/components/settings/SettingsPageClient';
+import SettingsPageWrapper from '@/components/pages/SettingsPageWrapper';
 
 export const metadata: Metadata = {
   title: '设置 - Web3 交易平台',
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function SettingsPage() {
-  return <SettingsPageClient />;
+  return <SettingsPageWrapper />;
 }

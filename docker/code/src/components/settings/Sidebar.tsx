@@ -18,6 +18,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     { id: 'identity', label: '用户身份', icon: '👤' },
     { id: 'rpc', label: 'RPC 节点', icon: '🔗' },
     { id: 'address', label: '交易池地址', icon: '📍' },
+    { id: 'tokens', label: '代币管理', icon: '💎' },
   ];
 
   const quickActions = [

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { mintETH, getBalance, getSupportedTokens, getAccountBalances } from '@/lib/mintService';
-import { formatBalance } from '@/lib/apiService';
+import { formatBalance } from '@/lib/utils';
 
 /**
  * GET /api/fork/mint

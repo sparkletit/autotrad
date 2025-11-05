@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
-import SearchableAddressSelect from './SearchableAddressSelect';
+import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
+import { fetchCustomTokens, fetchTokenBalances } from '@/lib/addressService';
 
 interface Account {
   id: number;
@@ -34,7 +35,6 @@ interface PairReserves {
 }
 
 const SwapPageClient: React.FC = () => {
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [fromAddress, setFromAddress] = useState('');
@@ -44,7 +44,7 @@ const SwapPageClient: React.FC = () => {
   const [loadingReserves, setLoadingReserves] = useState(false);
   const [gasMode, setGasMode] = useState<'auto' | '500000' | '1000000'>('auto');
   const [customGas, setCustomGas] = useState('');
-  const [slippageMode, setSlippageMode] = useState<'auto' | '0.5' | '5' | '10' | '30'>('0.5');
+  const [slippageMode, setSlippageMode] = useState<'auto' | '0.5' | '5' | '10' | '30'>('auto');
   const [customSlippage, setCustomSlippage] = useState('');
   const [selectedTokenIn, setSelectedTokenIn] = useState('');
   const [selectedTokenOut, setSelectedTokenOut] = useState('');
@@ -94,55 +94,26 @@ const SwapPageClient: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchAccounts();
-    fetchCustomTokens();
+    const loadTokens = async () => {
+      const tokens = await fetchCustomTokens();
+      setCustomTokens(tokens.map((t: any) => ({
+        symbol: t.symbol,
+        address: t.address || t.contract_address,
+        decimals: t.decimals,
+      })));
+    };
+    loadTokens();
   }, []);
 
   useEffect(() => {
     if (fromAddress) {
-      fetchTokenBalances(fromAddress);
+      const loadBalances = async () => {
+        const balances = await fetchTokenBalances(fromAddress);
+        setTokenBalances(balances);
+      };
+      loadBalances();
     }
   }, [fromAddress]);
-
-  const fetchAccounts = async () => {
-    try {
-      const response = await fetch('/api/accounts/all');
-      const data = await response.json();
-      if (data.success) {
-        setAccounts(data.data || []);
-      }
-    } catch (err) {
-      console.error('获取账户列表失败:', err);
-    }
-  };
-
-  const fetchCustomTokens = async () => {
-    try {
-      const response = await fetch('/api/custom-tokens');
-      const data = await response.json();
-      if (data.success) {
-        setCustomTokens(data.data.map((t: any) => ({
-          symbol: t.symbol,
-          address: t.address,
-          decimals: t.decimals,
-        })));
-      }
-    } catch (err) {
-      console.error('加载自定义代币失败:', err);
-    }
-  };
-
-  const fetchTokenBalances = async (address: string) => {
-    try {
-      const response = await fetch(`/api/accounts/${address}/balances`);
-      const data = await response.json();
-      if (data.success) {
-        setTokenBalances(data.data || []);
-      }
-    } catch (err) {
-      console.error('获取代币余额失败:', err);
-    }
-  };
 
   const handleQueryReserves = async () => {
     if (!isPairAddressValid) {
@@ -269,7 +240,12 @@ const SwapPageClient: React.FC = () => {
         setNewTokenAddress('');
         setNewTokenDecimals('18');
         setShowAddTokenModal(false);
-        fetchCustomTokens();
+        const tokens = await fetchCustomTokens();
+        setCustomTokens(tokens.map((t: any) => ({
+          symbol: t.symbol,
+          address: t.address || t.contract_address,
+          decimals: t.decimals,
+        })));
       } else {
         setError(data.error || '添加失败');
       }
@@ -326,8 +302,11 @@ const SwapPageClient: React.FC = () => {
         setTxHash(data.data.txHash);
         setAmountIn('');
         setAmountOut(data.data.amountOut || '');
-        setTimeout(() => {
-          if (fromAddress) fetchTokenBalances(fromAddress);
+        setTimeout(async () => {
+          if (fromAddress) {
+            const balances = await fetchTokenBalances(fromAddress);
+            setTokenBalances(balances);
+          }
         }, 1000);
       } else {
         setError(data.error || '交换失败');
@@ -346,22 +325,19 @@ const SwapPageClient: React.FC = () => {
         <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">代币交换</h1>
 
-          <div className="grid grid-cols-3 gap-6">
-            {/* 左侧：主要功能 */}
-            <div className="col-span-2 space-y-6">
+          <div className="grid grid-cols-1 gap-6">
+            {/* 主要功能 */}
+            <div className="space-y-6">
               {/* 账户选择 */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">账户信息</h2>
                 {error && <div className="p-4 bg-red-50 border border-red-200 rounded-lg mb-4"><p className="text-sm text-red-800">{error}</p></div>}
                 {success && <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-4"><p className="text-sm text-green-800">{success}</p>{txHash && <p className="text-xs text-green-700 font-mono mt-2 break-all">TX: {txHash}</p>}</div>}
-                <select value={fromAddress} onChange={(e) => setFromAddress(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">-- 选择账户 --</option>
-                  {accounts.map((account) => (
-                    <option key={`${account.type}-${account.id}`} value={account.address}>
-                      {account.account_name} ({account.address})
-                    </option>
-                  ))}
-                </select>
+                <UnifiedAddressSelector
+                  value={fromAddress}
+                  onChange={setFromAddress}
+                  placeholder="搜索或选择账户..."
+                />
               </div>
 
               {/* 第一步：交易池地址 */}
@@ -370,10 +346,10 @@ const SwapPageClient: React.FC = () => {
                 <div className="space-y-3">
                   <div>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">从地址别名中选择或输入地址</label>
-                    <SearchableAddressSelect
+                    <UnifiedAddressSelector
                       value={pairAddress}
                       onChange={setPairAddress}
-                      placeholder="搜索地址别名或粘贴地址..."
+                      placeholder="搜索交易池地址..."
                     />
                   </div>
                   <button
@@ -465,20 +441,7 @@ const SwapPageClient: React.FC = () => {
               </button>
             </div>
 
-            {/* 右侧：快速操作 */}
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">快速操作</h3>
-                <div className="space-y-2">
-                  <button onClick={handleClickWrapBNBButton} className="w-full px-4 py-2 bg-green-100 text-green-700 font-semibold rounded-lg hover:bg-green-200 transition-colors text-sm">
-                    💰 包装 WBNB
-                  </button>
-                  <button onClick={() => setShowAddTokenModal(true)} className="w-full px-4 py-2 bg-purple-100 text-purple-700 font-semibold rounded-lg hover:bg-purple-200 transition-colors text-sm">
-                    ➕ 添加代币
-                  </button>
-                </div>
-              </div>
-            </div>
+
           </div>
         </div>
       </div>

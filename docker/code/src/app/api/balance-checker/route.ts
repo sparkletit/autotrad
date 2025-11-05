@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, Hex } from 'viem';
-import { formatBalance } from '@/lib/apiService';
+import { formatBalance } from '@/lib/utils';
 
 /**
  * GET /api/balance-checker?address=0x...&network=fork&tokens=[{address,symbol}]
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         address: address as Hex,
       });
 
-      const nativeFormatted = (BigInt(nativeBalance) / BigInt(10 ** 18)).toString();
+      const nativeFormatted = formatBalance(nativeBalance, 18);
       balances.push({
         symbol: 'BNB',
         name: 'Binance Coin',

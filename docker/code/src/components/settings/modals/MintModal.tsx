@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Alert, FormSelect, FormInput } from '@/components/common';
-import AccountSelector from '@/components/common/AccountSelector';
+import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
 import { apiService } from '@/lib/apiService';
 
 interface MintModalProps {
@@ -86,11 +86,10 @@ const MintModal: React.FC<MintModalProps> = ({ isOpen, onClose, onSuccess }) => 
       ]}
     >
       <div className="space-y-4">
-        <AccountSelector
-          label="选择要Mint的地址"
+        <UnifiedAddressSelector
           value={selectedAddress}
           onChange={setSelectedAddress}
-          disabled={loading}
+          placeholder="搜索或选择账号..."
         />
 
         <FormInput

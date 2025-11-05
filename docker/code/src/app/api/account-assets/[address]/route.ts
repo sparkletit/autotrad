@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, Hex } from 'viem';
+import { formatBalance } from '@/lib/utils';
 
 /**
  * GET /api/account-assets/[address]
@@ -47,7 +48,7 @@ export async function GET(
         balance: bnbBalance.toString(),
         decimals: 18,
         contractAddress: null,
-        formatted: (BigInt(bnbBalance) / BigInt(10 ** 18)).toString(),
+        formatted: formatBalance(bnbBalance, 18),
       }
     ];
 
