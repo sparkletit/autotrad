@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, http, parseUnits, formatUnits } from 'viem';
+import { createPublicClient, createWalletClient, http, parseUnits, formatUnits } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { bsc } from 'viem/chains';
 import { Hex } from 'viem';
+import { getPrivateKeyFromDatabase, parseBlockchainError } from '@/lib/serverUtils';
 
 const getRpcUrl = (network: string): string => {
   const rpcUrls: Record<string, string> = {
@@ -93,11 +96,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rpcUrl = getRpcUrl(network);
-    const publicClient = createPublicClient({ transport: http(rpcUrl) });
-
     console.log('========== Swap 交易开始 ==========');
     console.log('账户:', account);
+    
+    // 1. 从数据库获取私钥
+    const privateKey = await getPrivateKeyFromDatabase(account);
+    if (!privateKey) {
+      console.error('❌ 无法获取私钥');
+      return NextResponse.json(
+        { success: false, error: `账户 ${account} 的私钥不存在，请确保该账户已导入` },
+        { status: 400 }
+      );
+    }
+    
+    // 2. 创建账户和客户端（无超时限制）
+    const rpcUrl = getRpcUrl(network);
+    const accountSigner = privateKeyToAccount(privateKey as Hex);
+    
+    const transport = http(rpcUrl, {
+      timeout: 0,       // 永不超时
+      retryCount: 3,
+      retryDelay: 1000,
+    });
+    
+    const publicClient = createPublicClient({
+      chain: bsc,
+      transport,
+    });
+    
+    const walletClient = createWalletClient({
+      account: accountSigner,
+      chain: bsc,
+      transport,
+    });
+    
+    console.log('✅ 成功创建 wallet client');
     console.log('Pair 地址:', pairAddress);
     console.log('输入代币:', tokenIn);
     console.log('输出代币:', tokenOut);
@@ -175,80 +208,42 @@ export async function POST(request: NextRequest) {
     }
 
     // 如果是 ERC20，先转账到 Pair
-    let transferGasUsed = '0x30000'; // 默认 196608 gas
     if (tokenIn !== '0x0000000000000000000000000000000000000000') {
       console.log('转账代币到 Pair...');
       
-      const transferData = `0xa9059cbb${pairAddress.slice(2).padStart(64, '0')}${amountInWei.toString(16).padStart(64, '0')}`;
+      const ERC20_TRANSFER_ABI = [
+        {
+          name: 'transfer',
+          type: 'function',
+          stateMutability: 'nonpayable',
+          inputs: [
+            { name: 'to', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+          ],
+          outputs: [{ name: '', type: 'bool' }],
+        },
+      ] as const;
       
-      // 如果 gas 是 auto，先预估
-      let actualGas = '0x30000';
-      if (gasLimit === 'auto') {
-        try {
-          const estimatedGas = await fetch(rpcUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              method: 'eth_estimateGas',
-              params: [{
-                from: account,
-                to: tokenIn,
-                data: transferData,
-              }],
-              id: 1,
-            }),
-          });
-          const gasResult = await estimatedGas.json();
-          if (gasResult.result) {
-            const estimated = BigInt(gasResult.result);
-            const gasWithBuffer = (estimated * BigInt(120)) / BigInt(100); // 预估值 * 1.2
-            actualGas = `0x${gasWithBuffer.toString(16)}`;
-            console.log('转账 Gas 预估:', estimated.toString());
-            console.log('转账 Gas 实际 (预估*1.2):', gasWithBuffer.toString());
-          }
-        } catch (estimateError) {
-          console.warn('Gas 预估失败，使用默认值:', estimateError);
-        }
-      } else {
-        actualGas = `0x${parseInt(gasLimit).toString(16)}`;
-      }
-      
-      transferGasUsed = actualGas;
-      
-      const transferTx = await fetch(rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_sendTransaction',
-          params: [{
-            from: account,
-            to: tokenIn,
-            data: transferData,
-            gas: transferGasUsed,
-          }],
-          id: 1,
-        }),
+      // 使用 viem 的 writeContract（自动签名）
+      const transferHash = await walletClient.writeContract({
+        address: tokenIn as Hex,
+        abi: ERC20_TRANSFER_ABI,
+        functionName: 'transfer',
+        args: [pairAddress as Hex, amountInWei],
       });
-
-      const transferResult = await transferTx.json();
-      if (transferResult.error) {
-        throw new Error(`转账失败: ${transferResult.error.message}`);
-      }
-
-      console.log('转账交易:', transferResult.result);
+      
+      console.log('✅ 转账交易已发送:', transferHash);
+      console.log('⏳ 等待转账确认...');
       
       const transferReceipt = await publicClient.waitForTransactionReceipt({ 
-        hash: transferResult.result as Hex, 
-        timeout: 30000 
+        hash: transferHash,
       });
       
       if (transferReceipt.status !== 'success') {
         throw new Error('代币转账失败（已被 revert）');
       }
       
-      console.log('转账确认成功');
+      console.log('✅ 转账确认成功');
     }
 
     // 调用 Pair 的 swap() 方法
@@ -262,75 +257,42 @@ export async function POST(request: NextRequest) {
     console.log('- amount1Out:', amount1Out);
     console.log('- 最小输出保护 (amountOutMin):', amountOutMin.toString());
 
-    const swapData = `0x022c0d9f${
-      BigInt(amount0Out).toString(16).padStart(64, '0')}${
-      BigInt(amount1Out).toString(16).padStart(64, '0')}${
-      account.slice(2).padStart(64, '0')}${
-      '80'.padStart(64, '0')}${'00'.padStart(64, '0')}`;
-
-    // 如果 gas 是 auto，先预估 swap 的 gas
-    let swapGasUsed = '0x50000'; // 默认 327680 gas
-    if (gasLimit === 'auto') {
-      try {
-        const estimatedGas = await fetch(rpcUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'eth_estimateGas',
-            params: [{
-              from: account,
-              to: pairAddress,
-              data: swapData,
-            }],
-            id: 1,
-          }),
-        });
-        const gasResult = await estimatedGas.json();
-        if (gasResult.result) {
-          const estimated = BigInt(gasResult.result);
-          const gasWithBuffer = (estimated * BigInt(120)) / BigInt(100); // 预估值 * 1.2
-          swapGasUsed = `0x${gasWithBuffer.toString(16)}`;
-          console.log('Swap Gas 预估:', estimated.toString());
-          console.log('Swap Gas 实际 (预估*1.2):', gasWithBuffer.toString());
-        }
-      } catch (estimateError) {
-        console.warn('Gas 预估失败，使用默认值:', estimateError);
-      }
-    } else {
-      swapGasUsed = `0x${parseInt(gasLimit).toString(16)}`;
-    }
-
-    const swapTx = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'eth_sendTransaction',
-        params: [{
-          from: account,
-          to: pairAddress,
-          data: swapData,
-          gas: swapGasUsed,
-        }],
-        id: 1,
-      }),
-    });
-
-    const swapResult = await swapTx.json();
+    // 定义 Pair 的 swap ABI
+    const SWAP_ABI = [
+      {
+        name: 'swap',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'amount0Out', type: 'uint256' },
+          { name: 'amount1Out', type: 'uint256' },
+          { name: 'to', type: 'address' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const;
     
-    if (swapResult.error) {
-      throw new Error(`Swap 失败: ${swapResult.error.message}`);
-    }
-
-    const txHash = swapResult.result;
-    console.log('Swap 交易哈希:', txHash);
-
-    // 等待交易确认
-    const receipt = await publicClient.waitForTransactionReceipt({ 
-      hash: txHash as Hex,
-      timeout: 30000
+    console.log('执行 Swap 交易...');
+    
+    // 使用 viem 的 writeContract（自动签名）
+    const txHash = await walletClient.writeContract({
+      address: pairAddress as Hex,
+      abi: SWAP_ABI,
+      functionName: 'swap',
+      args: [
+        BigInt(amount0Out),
+        BigInt(amount1Out),
+        account as Hex,
+        '0x' as Hex, // empty bytes
+      ],
     });
+
+    console.log('✅ Swap 交易已发送, 哈希:', txHash);
+    console.log('⏳ 等待交易确认...');
+
+    // 等待交易确认（无超时限制）
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
     console.log('交易确认 status:', receipt.status);
     console.log('Gas 使用:', receipt.gasUsed.toString());
@@ -374,11 +336,16 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Swap 执行失败:', error);
+    console.error('❌ Swap 执行失败:', error);
+    
+    // 使用统一的错误解读函数
+    const friendlyErrorMessage = parseBlockchainError(error);
+    console.error('解读后的错误:', friendlyErrorMessage);
+    
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Swap 执行失败',
+        error: friendlyErrorMessage,
       },
       { status: 500 }
     );

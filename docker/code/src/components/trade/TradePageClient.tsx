@@ -153,52 +153,90 @@ const TradePageClient: React.FC = () => {
 
 
   const handleTransfer = async () => {
+    console.log('🚀 开始转账流程...');
+    console.log('发送方:', fromAddress);
+    console.log('接收方:', toAddress);
+    console.log('数量:', amount);
+    console.log('代币:', selectedToken);
+
     if (!fromAddress || !toAddress || !amount) {
-      setError('请填写所有必要字段');
+      const msg = '请填写所有必要字段';
+      console.error('❌ 验证失败:', msg);
+      setError(msg);
       return;
     }
 
     if (parseFloat(amount) <= 0) {
-      setError('转账数量必须大于0');
+      const msg = '转账数量必须大于0';
+      console.error('❌ 验证失败:', msg);
+      setError(msg);
       return;
     }
 
     const selectedTokenBalance = getSelectedTokenBalance();
+    console.log('选中代币信息:', selectedTokenBalance);
+    
     if (!selectedTokenBalance) {
-      setError(`无法识别代币: ${selectedToken}`);
+      const msg = `无法识别代币: ${selectedToken}`;
+      console.error('❌ 验证失败:', msg);
+      setError(msg);
       return;
     }
 
     if (selectedToken === 'BNB') {
-      if (parseFloat(selectedTokenBalance.formatted || '0') <= 0) {
-        setError('BNB余额不足');
+      // 移除格式化字符串中的逗号以正确解析数字
+      const balanceNumber = parseFloat(selectedTokenBalance.formatted?.replace(/,/g, '') || '0');
+      const amountNumber = parseFloat(amount);
+      
+      console.log('余额验证:', {
+        formatted: selectedTokenBalance.formatted,
+        balanceNumber,
+        amountNumber,
+        isEnough: amountNumber <= balanceNumber
+      });
+      
+      if (balanceNumber <= 0) {
+        const msg = 'BNB余额不足';
+        console.error('❌ 验证失败:', msg);
+        setError(msg);
         return;
       }
-      if (parseFloat(amount) > parseFloat(selectedTokenBalance.formatted || '0')) {
-        setError(`BNB余额不足。可用余额: ${selectedTokenBalance.formatted} BNB`);
+      if (amountNumber > balanceNumber) {
+        const msg = `BNB余额不足。可用余额: ${selectedTokenBalance.formatted} BNB`;
+        console.error('❌ 验证失败:', msg);
+        setError(msg);
         return;
       }
+      console.log('✅ BNB 余额验证通过');
     }
 
     try {
+      console.log('✅ 验证通过，开始发送转账请求...');
       setLoading(true);
       setError('');
       setSuccess('');
       setTxHash('');
 
+      const requestBody = {
+        fromAddress,
+        toAddress,
+        amount,
+        tokenAddress: selectedTokenBalance?.contractAddress || null,
+      };
+      console.log('请求体:', requestBody);
+
       const response = await fetch('/api/transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromAddress,
-          toAddress,
-          amount,
-          tokenAddress: selectedTokenBalance?.contractAddress || null,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log('收到响应，状态码:', response.status);
       const data = await response.json();
+      console.log('响应数据:', data);
+
       if (data.success) {
+        console.log('✅ 转账成功!');
         setSuccess(data.message);
         setTxHash(data.txHash);
         setToAddress('');
@@ -206,11 +244,14 @@ const TradePageClient: React.FC = () => {
         const balances = await fetchTokenBalances(fromAddress);
         setTokenBalances(balances);
       } else {
+        console.error('❌ 转账失败:', data.error);
         setError(data.error || '转账失败');
       }
     } catch (err) {
+      console.error('❌ 转账异常:', err);
       setError(err instanceof Error ? err.message : '转账失败');
     } finally {
+      console.log('🏁 转账流程结束');
       setLoading(false);
     }
   };

@@ -22,8 +22,13 @@ export async function POST(request: NextRequest) {
     console.log(`生成Anvil启动命令: Block=${blockNumber}, Chain=${chainId}`);
 
     // 生成启动命令
-    //pkill -f "anvil --fork-url" 2>/dev/null; sleep 1; ~/.foundry/bin/anvil --fork-url "https://bnb-mainnet.g.alchemy.com/v2/6Dql1_Ba2rH04FbCbOcCQ" --fork-block-number 66909342 --port 8545 --host 0.0.0.0 --chain-id 56 > output.txt 2>&1 & tail -f output.txt
-    const startCommand = `pkill -f "anvil --fork-url" 2>/dev/null; sleep 1; ${ANVIL_EXECUTABLE} --fork-url "${rpcUrl}" --fork-block-number ${blockNumber} --gas-limit=30000000 --port ${forkPort} --host 0.0.0.0 --chain-id ${chainId} > output.txt 2>&1 & tail -f output.txt`;
+    // 添加重试和超时参数以提高稳定性：
+    // --timeout: RPC 请求超时时间(毫秒)
+    // --retries: RPC 请求失败后重试次数
+    // --fork-retry-backoff: 重试之间的退避时间(毫秒)
+    // --compute-units-per-second: 限制每秒计算单位，避免触发 RPC 限流
+    // 注意：移除了 --no-storage-caching 以减少对 RPC 的请求压力，提高启动成功率
+    const startCommand = `pkill -f "anvil --fork-url" 2>/dev/null; sleep 1; ${ANVIL_EXECUTABLE} --fork-url "${rpcUrl}" --fork-block-number ${blockNumber} --gas-limit=30000000 --port ${forkPort} --host 0.0.0.0 --chain-id ${chainId} --timeout 60000 --retries 10 --fork-retry-backoff 5000 --compute-units-per-second 1000 > output.txt 2>&1 & tail -f output.txt`;
 
     return NextResponse.json({
       success: true,

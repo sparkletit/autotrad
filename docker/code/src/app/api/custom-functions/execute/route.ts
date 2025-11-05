@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
-import pool from '@/lib/db';
+import { getPrivateKeyFromDatabase, parseBlockchainError } from '@/lib/serverUtils';
 
 // 辅助函数：将对象中的 BigInt 转换为字符串
 function convertBigIntToString(obj: any): any {
@@ -58,8 +58,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 连接到Fork网络
-    const provider = new ethers.JsonRpcProvider('http://host.docker.internal:8545');
+    console.log('========== 执行自定义函数 ==========');
+    console.log('账户:', account_address);
+    console.log('合约:', contract_address);
+    console.log('函数:', function_name);
+    
+    // 1. 从数据库获取私钥（支持 main_accounts, derived_accounts, imported_accounts）
+    const privateKey = await getPrivateKeyFromDatabase(account_address);
+    if (!privateKey) {
+      console.error('❌ 无法获取私钥');
+      return NextResponse.json(
+        { success: false, error: `账户 ${account_address} 的私钥不存在，请确保该账户已导入` },
+        { status: 400 }
+      );
+    }
+    
+    // 2. 连接到 Fork 网络（配置无超时限制）
+    const provider = new ethers.JsonRpcProvider('http://host.docker.internal:8545', undefined, {
+      staticNetwork: true, // 使用静态网络，避免额外的网络检测请求
+      batchMaxCount: 1,    // 禁用批量请求
+    });
     
     // 验证账户是否存在且有效
     try {
@@ -72,32 +90,9 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // 从数据库中获取账户的私钥
-    let signer;
-    try {
-      const [rows] = await pool.query(
-        'SELECT private_key FROM main_accounts WHERE address = ? LIMIT 1',
-        [account_address.toLowerCase()]
-      );
-      
-      if (rows && Array.isArray(rows) && rows.length > 0) {
-        const privateKey = (rows[0] as any).private_key;
-        if (privateKey) {
-          signer = new ethers.Wallet(privateKey, provider);
-          console.log(`使用数据库中的私钥创建 signer: ${signer.address}`);
-        } else {
-          throw new Error('账户在数据库中没有私钥');
-        }
-      } else {
-        throw new Error(`数据库中找不到账户 ${account_address}`);
-      }
-    } catch (dbError: any) {
-      console.error('从数据库获取私钥失败:', dbError);
-      return NextResponse.json(
-        { success: false, error: `无法为账户 ${account_address} 创建 signer: ${dbError.message}` },
-        { status: 400 }
-      );
-    }
+    // 3. 创建签名器
+    const signer = new ethers.Wallet(privateKey, provider);
+    console.log('✅ 成功创建 signer:', signer.address);
     
     // 创建合约实例
     const contract = new ethers.Contract(contract_address, abiArray, signer);
@@ -228,6 +223,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 执行合约函数
+    console.log('执行合约函数:', function_name);
+    console.log('参数:', paramsArray);
+    console.log('交易选项:', txOptions);
+    
     const tx = await contract[function_name](...paramsArray, txOptions);
     
     // 等待交易完成并获取交易回执
@@ -235,14 +234,20 @@ export async function POST(request: NextRequest) {
     let receipt;
     if (tx && typeof tx.wait === 'function') {
       // 这是一个交易对象，需要等待
-      // 注意：tx.wait() 在交易失败时会抛出异常，但我们仍然可以从异常中获取交易回执
+      console.log('✅ 交易已发送, 哈希:', tx.hash);
+      console.log('⏳ 等待交易确认（无超时限制）...');
+      
       try {
+        // wait() 不传参数 = 无超时限制
         receipt = await tx.wait();
+        console.log('✅ 交易已确认');
+        console.log('区块号:', receipt.blockNumber);
+        console.log('Gas 使用:', receipt.gasUsed?.toString());
       } catch (waitError: any) {
         // 交易失败，但我们可以从错误中获取交易回执
         if (waitError.receipt) {
           receipt = waitError.receipt;
-          console.log('交易已 revert，从异常中获取交易回执');
+          console.log('❌ 交易已 revert，从异常中获取交易回执');
         } else {
           throw waitError;
         }
@@ -252,7 +257,8 @@ export async function POST(request: NextRequest) {
       receipt = tx;
     } else {
       // 这可能是一个只读函数的返回值，或者交易直接返回结果
-      console.log('函数返回值:', tx);
+      console.log('✅ 函数执行成功（只读函数）');
+      console.log('返回值:', tx);
       const safeResult = convertBigIntToString(tx);
       return NextResponse.json({
         success: true,
@@ -288,14 +294,20 @@ export async function POST(request: NextRequest) {
     // 对于无返回值函数，设置result为”0x”(空布新)，表示执行成功但无返回值
     response.result = '0x'; // 无返回值
 
+    console.log('========== 自定义函数执行成功 ==========');
     return NextResponse.json(response);
   } catch (error: any) {
-    console.error('执行自定义函数失败:', error);
+    console.error('❌ 执行自定义函数失败:', error);
+    
+    // 使用统一的错误解读函数
+    const friendlyErrorMessage = parseBlockchainError(error);
+    console.error('解读后的错误:', friendlyErrorMessage);
+    
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || '函数执行失败',
-        details: error.toString(),
+        error: friendlyErrorMessage,
+        details: error.message || error.toString(),
       },
       { status: 500 }
     );
