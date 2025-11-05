@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
 import { fetchCustomTokens, fetchTokenBalances } from '@/lib/addressService';
+import { formatBalance } from '@/lib/utils';
 
 interface Account {
   id: number;
@@ -76,6 +77,18 @@ const SwapPageClient: React.FC = () => {
     }
     return acc;
   }, [] as typeof allTokens);
+
+  const getTokenSymbol = (address: string): string => {
+    if (!address) return 'N/A';
+    const token = uniqueTokens.find(t => t.address.toLowerCase() === address.toLowerCase());
+    return token ? token.symbol : address.slice(0, 6) + '...';
+  };
+
+  const getTokenDecimals = (address: string): number => {
+    if (!address) return 18;
+    const token = uniqueTokens.find(t => t.address.toLowerCase() === address.toLowerCase());
+    return token ? token.decimals : 18;
+  };
 
   const getGasLimit = () => {
     if (gasMode === 'auto') return 'auto';
@@ -364,10 +377,34 @@ const SwapPageClient: React.FC = () => {
                   <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-sm font-semibold text-blue-900 mb-2">储备信息：</p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div><span className="text-blue-600">Token0:</span> <span className="font-mono text-blue-900">{pairReserves.token0}</span></div>
-                      <div><span className="text-blue-600">Reserve0:</span> <span className="font-mono text-blue-900">{pairReserves.reserve0}</span></div>
-                      <div><span className="text-blue-600">Token1:</span> <span className="font-mono text-blue-900">{pairReserves.token1}</span></div>
-                      <div><span className="text-blue-600">Reserve1:</span> <span className="font-mono text-blue-900">{pairReserves.reserve1}</span></div>
+                      <div>
+                        <span className="text-blue-600">Token0:</span>
+                        <div className="font-mono text-blue-900">
+                          <div className="text-xs">{pairReserves.token0}</div>
+                          <div className="text-green-700 font-semibold">{getTokenSymbol(pairReserves.token0)}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-blue-600">Reserve0:</span>
+                        <div className="font-mono text-blue-900">
+                          <div className="text-xs text-gray-600">{pairReserves.reserve0}</div>
+                          <div className="text-green-700 font-semibold">{formatBalance(pairReserves.reserve0, getTokenDecimals(pairReserves.token0))}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-blue-600">Token1:</span>
+                        <div className="font-mono text-blue-900">
+                          <div className="text-xs">{pairReserves.token1}</div>
+                          <div className="text-green-700 font-semibold">{getTokenSymbol(pairReserves.token1)}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-blue-600">Reserve1:</span>
+                        <div className="font-mono text-blue-900">
+                          <div className="text-xs text-gray-600">{pairReserves.reserve1}</div>
+                          <div className="text-green-700 font-semibold">{formatBalance(pairReserves.reserve1, getTokenDecimals(pairReserves.token1))}</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
