@@ -8,7 +8,7 @@ interface SwapPoolWidgetProps {
   onSuccess?: () => void;
 }
 
-const SwapPoolWidget: React.FC<SwapPoolWidgetProps> = ({ isOpen, onClose }) => {
+const SwapPoolWidget: React.FC<SwapPoolWidgetProps> = ({ isOpen, onClose, onSuccess }) => {
   const [poolName, setPoolName] = useState('');
   const [poolAddress, setPoolAddress] = useState('');
   const [network, setNetwork] = useState('fork');
