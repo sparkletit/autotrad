@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-export type WidgetType = 'mint' | 'wrap-wbnb' | 'token-management' | 'swap-pool';
+export type WidgetType = 'mint' | 'wrap-wbnb' | 'token-management' | 'swap-pool' | 'fork-state';
 
 interface WidgetState {
   isOpen: boolean;

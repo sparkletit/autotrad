@@ -237,7 +237,11 @@ const TradePageClient: React.FC = () => {
 
       if (data.success) {
         console.log('✅ 转账成功!');
-        setSuccess(data.message);
+        let successMsg = data.message;
+        if (data.tip) {
+          successMsg += `\n\n💡 ${data.tip}`;
+        }
+        setSuccess(successMsg);
         setTxHash(data.txHash);
         setToAddress('');
         setAmount('');

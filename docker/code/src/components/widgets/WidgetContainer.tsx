@@ -5,6 +5,7 @@ import MintWidget from './MintWidget';
 import WrapWBNBWidget from './WrapWBNBWidget';
 import TokenManagementWidget from './TokenManagementWidget';
 import SwapPoolWidget from './SwapPoolWidget';
+import ForkStateWidget from './ForkStateWidget';
 import { WidgetType } from '@/hooks/useWidgetManager';
 
 interface WidgetContainerProps {
@@ -45,6 +46,11 @@ const WidgetContainer: React.FC<WidgetContainerProps> = ({
       />
       <SwapPoolWidget
         isOpen={isOpen && activeWidget === 'swap-pool'}
+        onClose={onClose}
+        onSuccess={onSuccess}
+      />
+      <ForkStateWidget
+        isOpen={isOpen && activeWidget === 'fork-state'}
         onClose={onClose}
         onSuccess={onSuccess}
       />

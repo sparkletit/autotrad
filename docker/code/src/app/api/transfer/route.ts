@@ -107,23 +107,29 @@ export async function POST(request: NextRequest) {
 
         console.log('✅ 交易已发送, 哈希:', hash);
 
-        // 等待交易确认（无超时限制，直到交易完成）
-        console.log('⏳ 等待交易确认...');
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        // 🚀 立即返回 hash，不等待确认
+        // 用户可以使用 cast 工具查看交易状态：
+        // cast tx <hash> --rpc-url http://localhost:8545
+        // cast receipt <hash> --rpc-url http://localhost:8545
         
-        console.log('交易回执状态:', receipt.status);
-        console.log('Gas 使用:', receipt.gasUsed.toString());
-        
-        if (receipt.status === 'reverted') {
-          throw new Error('BNB 转账被智能合约拒绝 (reverted)');
-        }
-
-        console.log('✅ 交易已确认');
+        // 异步后台等待确认（不阻塞响应）
+        publicClient.waitForTransactionReceipt({ hash }).then((receipt) => {
+          console.log('✅ 交易已确认, 哈希:', hash);
+          console.log('交易回执状态:', receipt.status);
+          console.log('Gas 使用:', receipt.gasUsed.toString());
+          
+          if (receipt.status === 'reverted') {
+            console.error('❌ 交易被 revert:', hash);
+          }
+        }).catch((err) => {
+          console.error('❌ 等待交易确认时出错:', err);
+        });
 
         return NextResponse.json({
           success: true,
-          message: `成功转账 ${amount} BNB 从 ${fromAddress} 到 ${toAddress}`,
+          message: `BNB 转账交易已提交`,
           txHash: hash,
+          tip: `使用 cast tx ${hash} --rpc-url http://localhost:8545 查看交易详情`,
         });
       } catch (error: any) {
         console.error('❌ BNB 转账失败:', error);
@@ -157,24 +163,30 @@ export async function POST(request: NextRequest) {
 
         console.log('✅ 交易已发送, 哈希:', hash);
 
-        // 4. 等待交易确认（无超时限制，直到交易完成）
-        console.log('⏳ 等待交易确认...');
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        // 🚀 立即返回 hash，不等待确认
+        // 用户可以使用 cast 工具查看交易状态：
+        // cast tx <hash> --rpc-url http://localhost:8545
+        // cast receipt <hash> --rpc-url http://localhost:8545
         
-        console.log('交易回执状态:', receipt.status);
-        console.log('Gas 使用:', receipt.gasUsed.toString());
-        console.log('事件日志数量:', receipt.logs.length);
-        
-        if (receipt.status === 'reverted') {
-          throw new Error('ERC20 代币转账被智能合约拒绝 (reverted)');
-        }
-
-        console.log('✅ 交易已确认');
+        // 异步后台等待确认（不阻塞响应）
+        publicClient.waitForTransactionReceipt({ hash }).then((receipt) => {
+          console.log('✅ 交易已确认, 哈希:', hash);
+          console.log('交易回执状态:', receipt.status);
+          console.log('Gas 使用:', receipt.gasUsed.toString());
+          console.log('事件日志数量:', receipt.logs.length);
+          
+          if (receipt.status === 'reverted') {
+            console.error('❌ 交易被 revert:', hash);
+          }
+        }).catch((err) => {
+          console.error('❌ 等待交易确认时出错:', err);
+        });
 
         return NextResponse.json({
           success: true,
-          message: `成功转账 ${amount} 代币从 ${fromAddress} 到 ${toAddress}`,
+          message: `ERC20 代币转账交易已提交`,
           txHash: hash,
+          tip: `使用 cast tx ${hash} --rpc-url http://localhost:8545 查看交易详情`,
         });
       } catch (err: any) {
         console.error('❌ ERC20 转账失败:', err);

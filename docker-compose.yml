@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Anvil API服务 - 用于管理Anvil启停（调用宅主机的anvil）
   anvil-api:

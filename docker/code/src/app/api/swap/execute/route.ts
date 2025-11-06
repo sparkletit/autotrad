@@ -233,17 +233,17 @@ export async function POST(request: NextRequest) {
       });
       
       console.log('✅ 转账交易已发送:', transferHash);
-      console.log('⏳ 等待转账确认...');
       
-      const transferReceipt = await publicClient.waitForTransactionReceipt({ 
-        hash: transferHash,
+      // 异步后台等待转账确认（不阻塞响应）
+      publicClient.waitForTransactionReceipt({ hash: transferHash }).then((transferReceipt) => {
+        if (transferReceipt.status !== 'success') {
+          console.error('❌ 代币转账失败（已被 revert）:', transferHash);
+        } else {
+          console.log('✅ 代币转账确认成功:', transferHash);
+        }
+      }).catch((err) => {
+        console.error('❌ 等待代币转账确认时出错:', err);
       });
-      
-      if (transferReceipt.status !== 'success') {
-        throw new Error('代币转账失败（已被 revert）');
-      }
-      
-      console.log('✅ 转账确认成功');
     }
 
     // 调用 Pair 的 swap() 方法
@@ -289,40 +289,33 @@ export async function POST(request: NextRequest) {
     });
 
     console.log('✅ Swap 交易已发送, 哈希:', txHash);
-    console.log('⏳ 等待交易确认...');
 
-    // 等待交易确认（无超时限制）
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-
-    console.log('交易确认 status:', receipt.status);
-    console.log('Gas 使用:', receipt.gasUsed.toString());
-    console.log('事件日志数量:', receipt.logs.length);
+    // 🚀 立即返回 hash，不等待确认
+    // 用户可以使用 cast 工具查看交易状态：
+    // cast tx <hash> --rpc-url http://localhost:8545
+    // cast receipt <hash> --rpc-url http://localhost:8545
     
-    // ⚠️ 严格检查交易是否成功
-    if (receipt.status !== 'success') {
-      console.error('========== 交易失败（已被 revert）==========');
-      console.error('交易哈希:', txHash);
-      console.error('可能原因:');
-      console.error('1. Pair 地址不正确或不存在');
-      console.error('2. 储备不足或流动性不足');
-      console.error('3. 代币余额不足');
-      console.error('4. 滑点保护触发（输出小于最小值）');
-      console.error('5. K 值检查失败');
+    // 异步后台等待交易确认（不阻塞响应）
+    publicClient.waitForTransactionReceipt({ hash: txHash }).then((receipt) => {
+      console.log('✅ Swap 交易已确认, 哈希:', txHash);
+      console.log('交易确认 status:', receipt.status);
+      console.log('Gas 使用:', receipt.gasUsed.toString());
+      console.log('事件日志数量:', receipt.logs.length);
       
-      return NextResponse.json({
-        success: false,
-        error: `交易执行失败（已被 revert）\n\n` +
-               `交易哈希: ${txHash}\n\n` +
-               `可能原因：\n` +
-               `• Pair 地址无效或不存在\n` +
-               `• 代币余额不足\n` +
-               `• 流动性不足\n` +
-               `• 计算的输出金额不正确\n` +
-               `• 滑点设置过小`,
-      }, { status: 400 });
-    }
+      if (receipt.status !== 'success') {
+        console.error('❌ Swap 交易失败（已被 revert）:', txHash);
+        console.error('可能原因:');
+        console.error('1. Pair 地址不正确或不存在');
+        console.error('2. 储备不足或流动性不足');
+        console.error('3. 代币余额不足');
+        console.error('4. 滑点保护触发（输出小于最小值）');
+        console.error('5. K 值检查失败');
+      }
+    }).catch((err) => {
+      console.error('❌ 等待 Swap 交易确认时出错:', err);
+    });
     
-    console.log('========== Swap 交易成功完成 ==========');
+    console.log('========== Swap 交易已提交 ==========');
 
     return NextResponse.json({
       success: true,
@@ -332,7 +325,8 @@ export async function POST(request: NextRequest) {
         amountOut: formatUnits(amountOutWei, decimalsOut),
         amountOutMin: formatUnits(amountOutMin, decimalsOut),
         slippage: slippageNum === 0 ? 'AUTO (接受任何数量)' : `${slippageNum}%`,
-        message: `成功交换 ${amountIn} 代币`,
+        message: `Swap 交易已提交`,
+        tip: `使用 cast tx ${txHash} --rpc-url http://localhost:8545 查看交易详情`,
       },
     });
   } catch (error) {

@@ -41,6 +41,13 @@ const WidgetTrigger: React.FC<WidgetTriggerProps> = ({ onTrigger, className = ''
       icon: '🔄',
       color: 'bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200',
     },
+    {
+      id: 'fork-state' as WidgetType,
+      label: '保存状态',
+      description: '保存当前Fork网络状态',
+      icon: '💾',
+      color: 'bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200',
+    },
   ];
 
   return (
