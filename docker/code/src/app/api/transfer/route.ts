@@ -68,14 +68,17 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. 创建账户和客户端
-    const rpcUrl = 'http://host.docker.internal:8545';
+    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
     const account = privateKeyToAccount(privateKey as Hex);
     
-    // 配置 HTTP transport，移除超时限制
+    // 配置 HTTP transport
     const transport = http(rpcUrl, {
-      timeout: 0, // 永不超时
+      timeout: 30000, // 30秒超时
       retryCount: 3,
       retryDelay: 1000,
+      fetchOptions: {
+        keepalive: true,
+      },
     });
     
     const publicClient = createPublicClient({
@@ -109,8 +112,8 @@ export async function POST(request: NextRequest) {
 
         // 🚀 立即返回 hash，不等待确认
         // 用户可以使用 cast 工具查看交易状态：
-        // cast tx <hash> --rpc-url http://localhost:8545
-        // cast receipt <hash> --rpc-url http://localhost:8545
+        // cast tx <hash> --rpc-url http://anvil-api:8545
+        // cast receipt <hash> --rpc-url http://anvil-api:8545
         
         // 异步后台等待确认（不阻塞响应）
         publicClient.waitForTransactionReceipt({ hash }).then((receipt) => {
@@ -129,7 +132,7 @@ export async function POST(request: NextRequest) {
           success: true,
           message: `BNB 转账交易已提交`,
           txHash: hash,
-          tip: `使用 cast tx ${hash} --rpc-url http://localhost:8545 查看交易详情`,
+          tip: `使用 cast tx ${hash} --rpc-url http://anvil-api:8545 查看交易详情`,
         });
       } catch (error: any) {
         console.error('❌ BNB 转账失败:', error);
@@ -165,8 +168,8 @@ export async function POST(request: NextRequest) {
 
         // 🚀 立即返回 hash，不等待确认
         // 用户可以使用 cast 工具查看交易状态：
-        // cast tx <hash> --rpc-url http://localhost:8545
-        // cast receipt <hash> --rpc-url http://localhost:8545
+        // cast tx <hash> --rpc-url http://anvil-api:8545
+        // cast receipt <hash> --rpc-url http://anvil-api:8545
         
         // 异步后台等待确认（不阻塞响应）
         publicClient.waitForTransactionReceipt({ hash }).then((receipt) => {
@@ -186,7 +189,7 @@ export async function POST(request: NextRequest) {
           success: true,
           message: `ERC20 代币转账交易已提交`,
           txHash: hash,
-          tip: `使用 cast tx ${hash} --rpc-url http://localhost:8545 查看交易详情`,
+          tip: `使用 cast tx ${hash} --rpc-url http://anvil-api:8545 查看交易详情`,
         });
       } catch (err: any) {
         console.error('❌ ERC20 转账失败:', err);

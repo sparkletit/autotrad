@@ -66,8 +66,8 @@ function getForkClient() {
  */
 export async function getBalance(address: string): Promise<string> {
   try {
-    // 直接使用宜主机访问地址，不供ForkManager中的配置（因为Fork是手动启动的）
-    const rpcUrl = 'http://host.docker.internal:8545';
+    // 使用环境变量配置的 RPC URL
+    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
     const publicClient = createPublicClient({
       transport: http(rpcUrl),
     });
@@ -87,8 +87,8 @@ export async function getBalance(address: string): Promise<string> {
  */
 export async function mintETH(address: string, amount: string): Promise<string> {
   try {
-    // 直接使用宜主机访问地址，不供ForkManager中的配置（因为Fork是手动启动的）
-    const rpcUrl = 'http://host.docker.internal:8545';
+    // 使用环境变量配置的 RPC URL
+    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
 
     const response = await fetch(rpcUrl, {
       method: 'POST',

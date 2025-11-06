@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     // 网络RPC映射
     const networkConfig: { [key: string]: { rpc: string; chainId?: number } } = {
-      fork: { rpc: 'http://host.docker.internal:8545' },
+      fork: { rpc: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545' },
       ethereum: { rpc: 'https://mainnet.infura.io/v3/YOUR_KEY', chainId: 1 },
       bsc: { rpc: 'https://bsc-dataseed1.bnbchain.org', chainId: 56 },
       polygon: { rpc: 'https://polygon-rpc.com', chainId: 137 },

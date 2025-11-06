@@ -21,7 +21,7 @@ export async function GET(
     }
 
     // 直接连接到Fork网络的RPC
-    const rpcUrl = 'http://host.docker.internal:8545';
+    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
     const publicClient = createPublicClient({
       transport: http(rpcUrl),
     });

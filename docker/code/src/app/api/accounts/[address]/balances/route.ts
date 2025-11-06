@@ -20,7 +20,7 @@ export async function GET(
       );
     }
 
-    const rpcUrl = 'http://host.docker.internal:8545';
+    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
     const publicClient = createPublicClient({
       transport: http(rpcUrl),
     });

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     const networkConfig: { [key: string]: string } = {
-      fork: 'http://host.docker.internal:8545',
+      fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
       ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
       bsc: 'https://bsc-dataseed1.bnbchain.org',
       polygon: 'https://polygon-rpc.com',

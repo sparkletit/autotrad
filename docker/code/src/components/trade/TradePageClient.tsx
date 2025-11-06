@@ -57,8 +57,9 @@ const TradePageClient: React.FC = () => {
   const [txHash, setTxHash] = useState('');
   const tokenDropdownRef = useRef<HTMLDivElement>(null);
 
+  // 注意：前端组件中的 networks 数组主要用于显示，实际 RPC 调用通过后端 API 完成
   const networks = [
-    { id: 'fork', name: 'Fork 网络', rpc: 'http://host.docker.internal:8545' },
+    { id: 'fork', name: 'Fork 网络', rpc: 'http://anvil-api:8545' }, // 仅供显示，实际通过 API 调用
     { id: 'ethereum', name: 'Ethereum', rpc: 'https://mainnet.infura.io/v3/YOUR_KEY' },
     { id: 'bsc', name: 'BSC', rpc: 'https://bsc-dataseed1.bnbchain.org' },
     { id: 'polygon', name: 'Polygon', rpc: 'https://polygon-rpc.com' },

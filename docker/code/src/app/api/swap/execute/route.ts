@@ -7,7 +7,7 @@ import { getPrivateKeyFromDatabase, parseBlockchainError } from '@/lib/serverUti
 
 const getRpcUrl = (network: string): string => {
   const rpcUrls: Record<string, string> = {
-    fork: 'http://host.docker.internal:8545',
+    fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
     ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
     bsc: 'https://bsc-dataseed1.bnbchain.org',
     polygon: 'https://polygon-rpc.com',
@@ -292,8 +292,8 @@ export async function POST(request: NextRequest) {
 
     // 🚀 立即返回 hash，不等待确认
     // 用户可以使用 cast 工具查看交易状态：
-    // cast tx <hash> --rpc-url http://localhost:8545
-    // cast receipt <hash> --rpc-url http://localhost:8545
+    // cast tx <hash> --rpc-url http://anvil-api:8545
+    // cast receipt <hash> --rpc-url http://anvil-api:8545
     
     // 异步后台等待交易确认（不阻塞响应）
     publicClient.waitForTransactionReceipt({ hash: txHash }).then((receipt) => {
@@ -326,7 +326,7 @@ export async function POST(request: NextRequest) {
         amountOutMin: formatUnits(amountOutMin, decimalsOut),
         slippage: slippageNum === 0 ? 'AUTO (接受任何数量)' : `${slippageNum}%`,
         message: `Swap 交易已提交`,
-        tip: `使用 cast tx ${txHash} --rpc-url http://localhost:8545 查看交易详情`,
+        tip: `使用 cast tx ${txHash} --rpc-url http://anvil-api:8545 查看交易详情`,
       },
     });
   } catch (error) {

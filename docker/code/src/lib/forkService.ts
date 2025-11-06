@@ -104,11 +104,8 @@ class ForkManager {
 
       console.log(`启动Fork网络: ${chainConfig.name}, 区块号: ${blockNumber}, 端口: ${forkPort}`);
 
-      // 注意：Anvil已作为Docker容器运行
-      // Node.js容器转发host.docker.internal来访问anvil
-      // Docker Compose的extra_hosts配置：host.docker.internal:host-gateway
-
-      const rpcUrl = `http://host.docker.internal:${forkPort}`;
+      // 注意：现在通过 anvil-api 服务管理 Fork，使用服务名访问
+      const rpcUrl = process.env.ANVIL_RPC_URL || `http://anvil-api:${forkPort}`;
 
       this.currentConfig = {
         networkId: chainConfig.id,
@@ -118,7 +115,6 @@ class ForkManager {
       };
 
       console.log(`Fork网络配置已保存: ${rpcUrl}`);
-      console.log(`Node.js容器内可以通过anvil容器名称直接访问`);
       
       return this.currentConfig;
     } catch (error) {

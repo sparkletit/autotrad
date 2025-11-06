@@ -74,7 +74,8 @@ export async function POST(request: NextRequest) {
     }
     
     // 2. 连接到 Fork 网络（配置无超时限制）
-    const provider = new ethers.JsonRpcProvider('http://host.docker.internal:8545', undefined, {
+    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
+    const provider = new ethers.JsonRpcProvider(rpcUrl, undefined, {
       staticNetwork: true, // 使用静态网络，避免额外的网络检测请求
       batchMaxCount: 1,    // 禁用批量请求
     });

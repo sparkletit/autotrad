@@ -163,9 +163,9 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
           <p className="text-sm text-gray-500">注意：Fork网络应处于运行状态。</p>
           <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
             <p className="font-semibold mb-2">调试信息：</p>
-            <p>检查地址: http://host.docker.internal:8545</p>
+            <p>检查地址: http://anvil-api:8545</p>
             <p>检查间隔: 1秒</p>
-            <p>如果Fork网络已启动，请确保Anvil在宿主机的8545端口运行</p>
+            <p>如果Fork网络已启动，请确保 anvil-api 容器正在运行</p>
           </div>
         </div>
       </div>

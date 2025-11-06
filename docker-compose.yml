@@ -22,16 +22,6 @@ services:
     environment:
       # Anvil RPC 地址（容器内）
       - ANVIL_RPC_URL=http://localhost:8545
-      # 使用宿主机代理（http://127.0.0.1:7897）
-      # 在容器中通过 host.docker.internal 或网关 IP 访问
-      - HTTP_PROXY=http://host.docker.internal:7897
-      - HTTPS_PROXY=http://host.docker.internal:7897
-      - http_proxy=http://host.docker.internal:7897
-      - https_proxy=http://host.docker.internal:7897
-      - NO_PROXY=localhost,127.0.0.1,anvil-api,mysql,nodejs
-      - no_proxy=localhost,127.0.0.1,anvil-api,mysql,nodejs
-      # GitHub 代理（使用宿主机代理）
-      - GITHUB_PROXY=http://host.docker.internal:7897
 
   # Node.js 应用服务
   nodejs:
@@ -56,11 +46,7 @@ services:
     depends_on:
       - mysql
       - anvil-api
-    links:
-      - anvil-api:anvil-api
-    # 注意：在Linux服务器上，需要用实际宅主机IP替换 host.docker.internal
     restart: unless-stopped
-
 
   # MySQL 数据库服务
   mysql:

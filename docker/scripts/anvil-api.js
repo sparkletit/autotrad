@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 
 const http = require('http');
-const https = require('https');
 const { spawn } = require('child_process');
-const { readFile, writeFile, mkdir, unlink } = require('fs/promises');
+const { readFile, mkdir } = require('fs/promises');
 const { join } = require('path');
 const { existsSync } = require('fs');
-
-// Node.js 18+ 内置 fetch
 
 const ANVIL_EXECUTABLE = '/root/.foundry/bin/anvil';
 const ANVIL_RPC_URL = 'http://localhost:8545';
@@ -48,8 +45,6 @@ async function startAnvil(config) {
     '--fork-retry-backoff', '5000',
     '--compute-units-per-second', '1000',
   ];
-
-  // 注意：状态加载将在 fork 启动后通过 RPC 调用完成
 
   // 启动 Anvil Fork 进程
   console.log(`启动 Anvil Fork: ${rpcUrl} @ block ${blockNumber}`);
