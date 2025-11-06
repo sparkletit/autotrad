@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`正在加载网络状态: ${stateName}`);
 
-    // 读取状态文件
-    const statesDir = join(process.cwd(), 'anvil-states');
+    // 读取状态文件（使用挂载的共享目录）
+    const statesDir = process.env.ANVIL_STATES_DIR || join(process.cwd(), 'anvil-states');
     const filePath = join(statesDir, `${stateName}.json`);
     
     let stateData: string;
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 调用 Anvil 的 anvil_loadState RPC 方法
-    const rpcUrl = 'http://host.docker.internal:8545';
+    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
     const response = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

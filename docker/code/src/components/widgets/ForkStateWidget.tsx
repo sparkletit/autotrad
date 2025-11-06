@@ -29,31 +29,62 @@ const ForkStateWidget: React.FC<ForkStateWidgetProps> = ({ isOpen, onClose, onSu
       setIsForkRunning(data.isRunning || false);
       
       if (data.isRunning) {
-        // 从配置 API 获取 fork 参数
-        const configResponse = await fetch('/api/fork/config');
-        const configData = await configResponse.json();
+        // 从状态 API 获取 fork 信息（包含更完整的配置）
+        // status API 返回的 config 字段包含完整的 fork 配置
+        let forkConfigData = null;
         
-        console.log('🔍 Config API 返回:', configData);
-        
-        if (configData.success && configData.currentConfig) {
-          // 尝试从配置中获取 fork 参数
-          setForkConfig({
-            rpcUrl: configData.currentConfig.rpcUrl || '',
-            blockNumber: configData.currentConfig.blockNumber || data.blockNumber || 0,
-            chainId: data.chainId || 56,
-            chainKey: configData.currentConfig.chainKey || 'bsc',
-          });
-          
-          console.log('✅ 获取到 fork 配置:', {
-            rpcUrl: configData.currentConfig.rpcUrl,
-            blockNumber: configData.currentConfig.blockNumber || data.blockNumber,
-            chainId: data.chainId,
-            chainKey: configData.currentConfig.chainKey,
-          });
+        if (data.config) {
+          // 如果 status API 返回了 config，使用它
+          forkConfigData = data.config;
         } else {
-          // 如果配置 API 没有返回完整信息，说明可能是从状态加载的
-          // 此时可以不保存 fork 参数，或者提示用户
-          console.warn('⚠️ 无法获取完整的 fork 配置', configData);
+          // 否则从配置 API 获取
+          const configResponse = await fetch('/api/fork/config');
+          const configData = await configResponse.json();
+          
+          if (configData.success && configData.currentConfig) {
+            forkConfigData = configData.currentConfig;
+          }
+        }
+        
+        console.log('🔍 获取到的 fork 配置:', forkConfigData);
+        
+        // 尝试从已保存的状态中查找对应的配置
+        // 如果当前运行的 fork 对应某个已保存的状态，从数据库获取参数
+        if (forkConfigData) {
+          // 构建 fork 配置对象
+          // 注意：需要从 chains 中获取 chainKey，或者从数据库的 fork_states 表查找
+          const configToSave = {
+            rpcUrl: forkConfigData.rpcUrl || '',
+            blockNumber: forkConfigData.blockNumber || data.blockNumber || 0,
+            chainId: forkConfigData.chainId || data.chainId || 56,
+            chainKey: forkConfigData.chainKey || '', // 这个可能为空，需要从 chains 获取
+          };
+          
+          // 如果缺少 chainKey，尝试从 chains 中查找
+          if (!configToSave.chainKey && configToSave.chainId) {
+            const configResponse = await fetch('/api/fork/config');
+            const configData = await configResponse.json();
+            if (configData.success && configData.chains) {
+              const matchingChain = configData.chains.find(
+                (chain: any) => chain.id === configToSave.chainId
+              );
+              if (matchingChain) {
+                configToSave.chainKey = matchingChain.key;
+              }
+            }
+          }
+          
+          // 检查是否所有必需参数都存在
+          // 注意：chainKey 不是必需的，后端会通过 rpcUrl 自动查找
+          if (configToSave.rpcUrl && configToSave.blockNumber !== undefined && configToSave.chainId !== undefined) {
+            setForkConfig(configToSave);
+            console.log('✅ 获取到 fork 配置（后端会自动补充 chainKey）:', configToSave);
+          } else {
+            console.warn('⚠️ Fork 配置不完整，缺少参数:', configToSave);
+            setForkConfig(null);
+          }
+        } else {
+          console.warn('⚠️ 无法获取 fork 配置');
           setForkConfig(null);
         }
       }

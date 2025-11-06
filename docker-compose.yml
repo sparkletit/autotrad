@@ -1,24 +1,37 @@
 services:
-  # Anvil API服务 - 用于管理Anvil启停（调用宅主机的anvil）
+  # Anvil API服务 - 在容器内运行和管理Anvil Fork网络
+  # 注意：使用基于 Debian 的镜像（而非 Alpine）以支持 Foundry 的 glibc 依赖
   anvil-api:
-    image: 2s201l9ub5m6l2.xuanyuan.run/node:20-alpine
+    image: 2s201l9ub5m6l2.xuanyuan.run/node:20
     container_name: web3_trad_anvil_api
     ports:
-      - "3000:3000"
+      - "3000:3000"  # Anvil API 管理端口
+      - "8545:8545"  # Anvil RPC 端口
     volumes:
       - ./docker/scripts/anvil-api.js:/app/anvil-api.js
+      - ./docker/scripts/install-foundry.sh:/app/install-foundry.sh
+      - ./docker/data/anvil-states:/app/anvil-states  # 状态文件目录
+      - foundry-cache:/root/.foundry  # 持久化 Foundry 安装，避免每次重启都重新安装
     working_dir: /app
-    command: sh -c "apk add --no-cache bash curl && node anvil-api.js"
+    command: sh -c "chmod +x /app/install-foundry.sh && /app/install-foundry.sh && node anvil-api.js"
     networks:
       - web3_network
-    # 注意：在Linux服务器上，需要用实际宅主机IP替换 host.docker.internal
-    # 如果要使用 host.docker.internal，请在 docker-compose up 时添加:
-    # DOCKER_OPTS="--add-host=host.docker.internal:127.0.0.1"
-    # 或在 docker daemon.json 中配置
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # 允许容器访问宿主机
     environment:
-      # aнvil 前端的 RPC 地址
-      - ANVIL_RPC_URL=${ANVIL_RPC_URL:-http://host.docker.internal:8545}
+      # Anvil RPC 地址（容器内）
+      - ANVIL_RPC_URL=http://localhost:8545
+      # 使用宿主机代理（http://127.0.0.1:7897）
+      # 在容器中通过 host.docker.internal 或网关 IP 访问
+      - HTTP_PROXY=http://host.docker.internal:7897
+      - HTTPS_PROXY=http://host.docker.internal:7897
+      - http_proxy=http://host.docker.internal:7897
+      - https_proxy=http://host.docker.internal:7897
+      - NO_PROXY=localhost,127.0.0.1,anvil-api,mysql,nodejs
+      - no_proxy=localhost,127.0.0.1,anvil-api,mysql,nodejs
+      # GitHub 代理（使用宿主机代理）
+      - GITHUB_PROXY=http://host.docker.internal:7897
 
   # Node.js 应用服务
   nodejs:
@@ -30,9 +43,12 @@ services:
       - "${NODE_PORT:-8888}:8888"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
-      - ANVIL_RPC_URL=${ANVIL_RPC_URL:-http://host.docker.internal:8545}
+      - ANVIL_RPC_URL=${ANVIL_RPC_URL:-http://anvil-api:8545}
+      - ANVIL_API_URL=${ANVIL_API_URL:-http://anvil-api:3000}
+      - ANVIL_STATES_DIR=/app/anvil-states
     volumes:
       - ./docker/code:/app
+      - ./docker/data/anvil-states:/app/anvil-states  # 状态文件目录（与 anvil-api 共享）
     working_dir: /app
     command: sh -c "npm install && npm run dev"
     networks:
@@ -64,6 +80,10 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
       retries: 10
+
+volumes:
+  foundry-cache:
+    driver: local
 
 networks:
   web3_network:

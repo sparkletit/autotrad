@@ -20,7 +20,67 @@ export async function POST(request: NextRequest) {
     }
 
     // Fork 参数是可选的（如果没有提供，只保存状态文件，不保存到数据库）
-    const hasForkParams = rpcUrl && blockNumber && chainId && chainKey;
+    // 优先通过 rpcUrl 从数据库查找 chainKey 和 chainId（最准确的方法）
+    let finalChainKey = chainKey;
+    let finalChainId = chainId;
+    let finalRpcUrl = rpcUrl;
+    
+    // 如果有 rpcUrl，从数据库查找对应的 chain_key 和 chain_id
+    if (rpcUrl) {
+      try {
+        const connection = await pool.getConnection();
+        try {
+          // 通过 rpcUrl 查找对应的 chain_key 和 chain_id
+          const [rows] = await connection.query(
+            'SELECT chain_key, chain_id, rpc_url FROM rpc_nodes WHERE rpc_url = ? AND is_active = 1 LIMIT 1',
+            [rpcUrl]
+          );
+          if (rows && (rows as any[]).length > 0) {
+            const nodeInfo = (rows as any[])[0];
+            if (!finalChainKey) {
+              finalChainKey = nodeInfo.chain_key;
+              console.log(`通过 rpcUrl 查找到 chainKey: ${finalChainKey}`);
+            }
+            if (!finalChainId && nodeInfo.chain_id !== undefined) {
+              finalChainId = nodeInfo.chain_id;
+              console.log(`通过 rpcUrl 查找到 chainId: ${finalChainId}`);
+            }
+            // 使用数据库中的 rpc_url（可能更规范）
+            finalRpcUrl = nodeInfo.rpc_url;
+          } else {
+            console.warn(`⚠️ 在数据库中未找到 rpcUrl 对应的记录: ${rpcUrl}`);
+          }
+        } finally {
+          connection.release();
+        }
+      } catch (err) {
+        console.warn('通过 rpcUrl 查找 chainKey/chainId 失败:', err);
+      }
+    }
+    
+    // 如果仍然缺少 chainKey，但有 chainId，尝试通过 chainId 查找
+    if (!finalChainKey && finalChainId !== undefined) {
+      try {
+        const connection = await pool.getConnection();
+        try {
+          const [rows] = await connection.query(
+            'SELECT chain_key FROM rpc_nodes WHERE chain_id = ? AND is_active = 1 LIMIT 1',
+            [finalChainId]
+          );
+          if (rows && (rows as any[]).length > 0) {
+            finalChainKey = (rows as any[])[0].chain_key;
+            console.log(`通过 chainId ${finalChainId} 查找到 chainKey: ${finalChainKey}`);
+          }
+        } finally {
+          connection.release();
+        }
+      } catch (err) {
+        console.warn('通过 chainId 查找 chainKey 失败:', err);
+      }
+    }
+    
+    // 检查是否有足够的参数保存到数据库
+    const hasForkParams = finalRpcUrl && blockNumber !== undefined && finalChainId !== undefined;
 
     // 验证状态名称（只允许字母、数字、下划线、中划线）
     if (!/^[a-zA-Z0-9_-]+$/.test(stateName)) {
@@ -33,7 +93,7 @@ export async function POST(request: NextRequest) {
     console.log(`正在保存网络状态: ${stateName}`);
 
     // 调用 Anvil 的 anvil_dumpState RPC 方法
-    const anvilRpcUrl = 'http://host.docker.internal:8545';
+    const anvilRpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
     const response = await fetch(anvilRpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -55,8 +115,8 @@ export async function POST(request: NextRequest) {
       throw new Error('未能获取网络状态数据');
     }
 
-    // 保存到文件
-    const statesDir = join(process.cwd(), 'anvil-states');
+    // 保存到文件（使用挂载的共享目录）
+    const statesDir = process.env.ANVIL_STATES_DIR || join(process.cwd(), 'anvil-states');
     
     // 确保目录存在
     try {
@@ -87,7 +147,7 @@ export async function POST(request: NextRequest) {
            chain_key = VALUES(chain_key),
            file_name = VALUES(file_name),
            updated_at = CURRENT_TIMESTAMP`,
-          [stateName, rpcUrl, blockNumber, chainId, chainKey, fileName]
+          [stateName, finalRpcUrl, blockNumber, finalChainId, finalChainKey || null, fileName]
         );
         
         console.log(`✅ Fork 参数已保存到数据库`);
@@ -104,10 +164,10 @@ export async function POST(request: NextRequest) {
       fileName,
       filePath,
       forkConfig: hasForkParams ? {
-        rpcUrl,
+        rpcUrl: finalRpcUrl,
         blockNumber,
-        chainId,
-        chainKey,
+        chainId: finalChainId,
+        chainKey: finalChainKey || null,
       } : null,
     });
   } catch (error) {
@@ -127,8 +187,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     const { readdir, stat } = await import('fs/promises');
-    const statesDir = join(process.cwd(), 'anvil-states');
-
+    
     // 从数据库获取 fork 参数
     const connection = await pool.getConnection();
     let dbStates: any[] = [];
@@ -152,6 +211,8 @@ export async function GET() {
       });
     });
 
+    // 使用挂载的共享目录
+    const statesDir = process.env.ANVIL_STATES_DIR || join(process.cwd(), 'anvil-states');
     try {
       const files = await readdir(statesDir);
       const jsonFiles = files.filter(f => f.endsWith('.json'));
@@ -218,7 +279,7 @@ export async function DELETE(request: NextRequest) {
 
     console.log(`正在删除状态: ${stateName}`);
 
-    const statesDir = join(process.cwd(), 'anvil-states');
+    const statesDir = process.env.ANVIL_STATES_DIR || join(process.cwd(), 'anvil-states');
     const filePath = join(statesDir, `${stateName}.json`);
 
     // 删除文件

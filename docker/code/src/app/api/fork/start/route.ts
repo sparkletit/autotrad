@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ANVIL_EXECUTABLE = '~/.foundry/bin/anvil';
-const ANVIL_RPC_URL = 'http://host.docker.internal:8545';
+// Anvil API 服务地址（在 Docker 网络中通过服务名访问）
+const ANVIL_API_URL = process.env.ANVIL_API_URL || 'http://anvil-api:3000';
+const ANVIL_RPC_URL = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
 
 /**
  * POST /api/fork/start
- * 生成Anvil启动命令供用户在宿主机手动执行
+ * 通过 Anvil API 服务启动 Anvil Fork 网络
  */
 export async function POST(request: NextRequest) {
   try {
@@ -20,29 +21,94 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`生成Anvil启动命令: Block=${blockNumber}, Chain=${chainId}, LoadState=${loadState || '无'}`);
+    console.log(`通过 Anvil API 启动 Fork: Block=${blockNumber}, Chain=${chainId}, LoadState=${loadState || '无'}`);
 
-    // 生成启动命令（始终 fork 原链以保留主网合约）
-    // 添加重试和超时参数以提高稳定性
-    const startCommand = `pkill -f "anvil --fork-url" 2>/dev/null; sleep 1; ${ANVIL_EXECUTABLE} --fork-url "${rpcUrl}" --fork-block-number ${blockNumber} --gas-limit=30000000 --port ${forkPort} --host 0.0.0.0 --chain-id ${chainId} --timeout 60000 --retries 10 --fork-retry-backoff 5000 --compute-units-per-second 1000 > output.txt 2>&1 & tail -f output.txt`;
+    // 先检查 Anvil API 服务是否就绪
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+      
+      const healthCheck = await fetch(`${ANVIL_API_URL}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!healthCheck.ok) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Anvil API 服务未就绪，请稍候重试。' 
+          },
+          { status: 503 }
+        );
+      }
+    } catch (healthError: any) {
+      if (healthError.name === 'AbortError' || healthError.code === 'ECONNREFUSED') {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Anvil API 服务未就绪，请稍候重试。如果问题持续，请检查 anvil-api 容器是否正在安装 Foundry。' 
+          },
+          { status: 503 }
+        );
+      }
+      throw healthError;
+    }
+
+    // 调用 Anvil API 服务启动 Fork
+    let response: Response;
+    try {
+      response = await fetch(`${ANVIL_API_URL}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rpcUrl,
+          blockNumber,
+          chainId,
+          loadState,
+        }),
+        signal: (() => {
+          const controller = new AbortController();
+          setTimeout(() => controller.abort(), 30000); // 30秒超时
+          return controller.signal;
+        })()
+      });
+    } catch (fetchError: any) {
+      // 连接错误处理
+      if (fetchError.code === 'ECONNREFUSED' || fetchError.message?.includes('ECONNREFUSED')) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Anvil API 服务未就绪，请稍候重试。如果问题持续，请检查 anvil-api 容器是否正在安装 Foundry。' 
+          },
+          { status: 503 }
+        );
+      }
+      throw fetchError;
+    }
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      return NextResponse.json(
+        { success: false, error: result.error || '启动 Anvil Fork 失败' },
+        { status: response.status || 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      message: loadState 
-        ? `请在宿主机执行以下命令从状态 "${loadState}" 启动Anvil`
-        : '请在宿主机执行以下命令启动Anvil',
-      command: startCommand,
+      message: 'Anvil Fork网络已启动',
       config: {
-        rpcUrl: ANVIL_RPC_URL,
-        blockNumber,
-        chainId,
-        forkPort,
-        loadState: loadState || null,
+        ...result.config,
+        rpcUrl: ANVIL_RPC_URL, // 返回容器内的 RPC 地址
       },
     });
   } catch (error) {
-    console.error('生成启动命令失败:', error);
-    const errorMessage = error instanceof Error ? error.message : '生成启动命令失败';
+    console.error('启动 Anvil Fork 失败:', error);
+    const errorMessage = error instanceof Error ? error.message : '启动失败';
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }
