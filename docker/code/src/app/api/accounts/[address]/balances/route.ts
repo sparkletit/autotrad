@@ -5,6 +5,9 @@ import { formatBalance } from '@/lib/utils';
 /**
  * GET /api/accounts/[address]/balances
  * 获取指定账户的多种代币余额（BNB及ERC20）
+ * 
+ * 查询参数:
+ *   - tokens: 可选，逗号分隔的代币符号列表，如 "BNB,USDT,USDC"。如果不提供，只查询 BNB
  */
 export async function GET(
   request: NextRequest,
@@ -20,6 +23,13 @@ export async function GET(
       );
     }
 
+    // 获取查询参数，指定要查询的代币
+    const { searchParams } = new URL(request.url);
+    const tokensParam = searchParams.get('tokens'); // 例如: "BNB,USDT" 或 "BNB"
+    const requestedTokens = tokensParam 
+      ? tokensParam.split(',').map(t => t.trim().toUpperCase())
+      : ['BNB']; // 默认只查询 BNB
+
     const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
     const publicClient = createPublicClient({
       transport: http(rpcUrl),
@@ -27,26 +37,28 @@ export async function GET(
 
     const balances: any[] = [];
 
-    // 1. 获取原生代币（BNB）余额
-    try {
-      const bnbBalance = await publicClient.getBalance({
-        address: address as Hex,
-      });
+    // 1. 获取原生代币（BNB）余额（如果请求中包含 BNB）
+    if (requestedTokens.includes('BNB')) {
+      try {
+        const bnbBalance = await publicClient.getBalance({
+          address: address as Hex,
+        });
 
-      const bnbFormatted = formatBalance(bnbBalance, 18);
-      balances.push({
-        symbol: 'BNB',
-        name: 'Binance Coin',
-        balance: bnbBalance.toString(),
-        formatted: bnbFormatted,
-        decimals: 18,
-        contractAddress: null,
-      });
-    } catch (err) {
-      console.error('获取BNB余额失败:', err);
+        const bnbFormatted = formatBalance(bnbBalance, 18);
+        balances.push({
+          symbol: 'BNB',
+          name: 'Binance Coin',
+          balance: bnbBalance.toString(),
+          formatted: bnbFormatted,
+          decimals: 18,
+          contractAddress: null,
+        });
+      } catch (err) {
+        console.error('获取BNB余额失败:', err);
+      }
     }
 
-    // 2. 获取ERC20代币余额（USDT、USDC、BUSD）
+    // 2. 获取ERC20代币余额（仅在请求中包含时才查询）
     const erc20Tokens = [
       {
         symbol: 'USDT',
@@ -68,7 +80,12 @@ export async function GET(
       },
     ];
 
+    // 只查询请求中包含的 ERC20 代币
     for (const token of erc20Tokens) {
+      if (!requestedTokens.includes(token.symbol)) {
+        continue; // 跳过未请求的代币
+      }
+
       try {
         // 调用balanceOf函数获取ERC20余额
         // balanceOf(address) 返回 uint256

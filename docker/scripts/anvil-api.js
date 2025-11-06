@@ -23,11 +23,65 @@ async function ensureStatesDir() {
   }
 }
 
+// 强制停止所有 Anvil 进程
+async function killAllAnvilProcesses() {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    // 先尝试正常终止
+    exec('pkill -f "/root/.foundry/bin/anvil" || true', () => {
+      // 等待一下
+      setTimeout(() => {
+        // 强制杀死
+        exec('pkill -9 -f "/root/.foundry/bin/anvil" || true', () => {
+          // 等待更长时间确保端口释放
+          setTimeout(resolve, 3000); // 等待 3 秒确保进程完全退出和端口释放
+        });
+      }, 1000);
+    });
+  });
+}
+
+// 检查端口是否可用
+async function checkPortAvailable(port) {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    // 检查端口是否被占用
+    exec(`netstat -tuln | grep :${port} || ss -tuln | grep :${port} || true`, (error, stdout) => {
+      resolve(!stdout || stdout.trim() === '');
+    });
+  });
+}
+
 // 启动 Anvil Fork 网络
 async function startAnvil(config) {
   // 如果已有进程在运行，先停止
   if (anvilProcess) {
     await stopAnvil();
+  }
+  
+  // 强制清理所有 Anvil 进程（防止僵尸进程占用端口）
+  console.log('清理所有现有 Anvil 进程...');
+  await killAllAnvilProcesses();
+  
+  // 检查端口是否已释放
+  let retries = 5;
+  while (retries > 0) {
+    const portAvailable = await checkPortAvailable(8545);
+    if (portAvailable) {
+      console.log('端口 8545 已释放');
+      break;
+    }
+    console.log(`端口 8545 仍被占用，等待释放... (剩余重试: ${retries})`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    retries--;
+    // 如果还是被占用，再次尝试清理
+    if (retries > 0) {
+      await killAllAnvilProcesses();
+    }
+  }
+  
+  if (retries === 0) {
+    throw new Error('端口 8545 无法释放，请检查是否有其他进程占用');
   }
 
   const { rpcUrl, blockNumber, chainId = 56, loadState } = config;
@@ -44,6 +98,7 @@ async function startAnvil(config) {
     '--retries', '10',
     '--fork-retry-backoff', '5000',
     '--compute-units-per-second', '1000',
+    '--block-time', '1', // 自动挖矿，每1秒一个区块（确保交易及时确认）
   ];
 
   // 启动 Anvil Fork 进程

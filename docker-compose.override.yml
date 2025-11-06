@@ -1,8 +1,0 @@
-services:
-  anvil-api:
-    extra_hosts:
-      - "host.docker.internal:172.24.181.108"
-  
-  nodejs:
-    extra_hosts:
-      - "host.docker.internal:172.24.181.108"

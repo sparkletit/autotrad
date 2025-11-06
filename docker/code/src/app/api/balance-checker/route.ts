@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       console.error('获取BNB余额失败:', err);
     }
 
-    // 2. 获取自定义ERC20代币余额
+    // 2. 获取自定义ERC20代币余额（只查询前端传递的代币）
     let customTokenList: any[] = [];
     try {
       if (tokensParam) {
@@ -70,34 +70,11 @@ export async function GET(request: NextRequest) {
       console.error('解析自定义代币列表失败:', err);
     }
 
-    // 默认代币
-    const defaultTokens = [
-      {
-        symbol: 'USDT',
-        name: 'Tether USD',
-        address: '0x55d398326f99059fF775485246999027B3197955',
-        decimals: 18,
-      },
-      {
-        symbol: 'USDC',
-        name: 'USD Coin',
-        address: '0x8AC76a51cc950d9822D68b83FE1Ad97B32Cd580d',
-        decimals: 18,
-      },
-      {
-        symbol: 'BUSD',
-        name: 'Binance USD',
-        address: '0xe9e7cea3dedca5984780bafc599bd69add087d56',
-        decimals: 18,
-      },
-    ];
-
-    // 合并默认代币和自定义代币
-    const allTokens = [...defaultTokens, ...customTokenList];
-    // 去重
+    // 只查询前端传递的代币，不自动添加默认代币
+    // 去重处理
     const uniqueTokens = Array.from(
       new Map(
-        allTokens.map((t) => [t.address.toLowerCase(), t])
+        customTokenList.map((t) => [t.address.toLowerCase(), t])
       ).values()
     );
 

@@ -55,6 +55,8 @@ const TradePageClient: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [txHash, setTxHash] = useState('');
+  const [txStatus, setTxStatus] = useState<'pending' | 'confirmed' | 'failed' | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
   const tokenDropdownRef = useRef<HTMLDivElement>(null);
 
   // 注意：前端组件中的 networks 数组主要用于显示，实际 RPC 调用通过后端 API 完成
@@ -92,10 +94,31 @@ const TradePageClient: React.FC = () => {
     if (fromAddress) {
       const loadBalances = async () => {
         setBalancesLoading(true);
-        const balances = await fetchTokenBalances(fromAddress);
-        setTokenBalances(balances);
-        setSelectedToken('BNB');
-        setBalancesLoading(false);
+        try {
+          const balances = await fetchTokenBalances(fromAddress);
+          setTokenBalances(balances);
+          setSelectedToken('BNB');
+        } catch (err) {
+          console.error('加载余额失败:', err);
+          // 加载失败时不清空余额，保留之前的余额信息
+          // 如果之前没有余额，至少确保 BNB 可以被识别
+          setTokenBalances(prevBalances => {
+            if (prevBalances.length === 0) {
+              // 设置一个默认的 BNB 余额，确保至少可以识别 BNB
+              return [{
+                symbol: 'BNB',
+                name: 'Binance Coin',
+                balance: '0',
+                formatted: '0',
+                decimals: 18,
+                contractAddress: null,
+              }];
+            }
+            return prevBalances; // 保留原有余额
+          });
+        } finally {
+          setBalancesLoading(false);
+        }
       };
       loadBalances();
     }
@@ -133,9 +156,23 @@ const TradePageClient: React.FC = () => {
 
 
   const getSelectedTokenBalance = (): TokenBalance | undefined => {
+    // 先从 tokenBalances 中查找
     const found = tokenBalances.find((t) => t.symbol === selectedToken);
     if (found) return found;
     
+    // 如果是 BNB，即使余额列表中找不到，也返回一个默认对象（避免余额未加载时无法转账）
+    if (selectedToken === 'BNB') {
+      return {
+        symbol: 'BNB',
+        name: 'Binance Coin',
+        balance: '0',
+        formatted: '0',
+        decimals: 18,
+        contractAddress: null,
+      };
+    }
+    
+    // 从自定义代币中查找
     const customToken = customTokens.find((t) => t.symbol === selectedToken);
     if (customToken) {
       return {
@@ -237,27 +274,114 @@ const TradePageClient: React.FC = () => {
       console.log('响应数据:', data);
 
       if (data.success) {
-        console.log('✅ 转账成功!');
-        let successMsg = data.message;
-        if (data.tip) {
-          successMsg += `\n\n💡 ${data.tip}`;
-        }
-        setSuccess(successMsg);
+        console.log('✅ 交易已提交，等待确认...');
+        // 交易已提交，设置状态为 pending
         setTxHash(data.txHash);
+        setTxStatus('pending');
+        setSuccess(`交易已提交，等待确认中...\n\n交易哈希: ${data.txHash}`);
+        setError('');
         setToAddress('');
         setAmount('');
-        const balances = await fetchTokenBalances(fromAddress);
-        setTokenBalances(balances);
+        
+        // 立即重置 loading 状态
+        setLoading(false);
+        
+        // 立即检查一次交易状态
+        checkTransactionStatus(data.txHash);
+        
+        // 异步刷新余额（不阻塞 UI）
+        fetchTokenBalances(fromAddress)
+          .then(balances => {
+            setTokenBalances(balances);
+          })
+          .catch(err => {
+            console.warn('刷新余额失败:', err);
+          });
       } else {
         console.error('❌ 转账失败:', data.error);
         setError(data.error || '转账失败');
+        setLoading(false);
+        
+        // 转账失败时也刷新余额，确保状态同步
+        // 只刷新选中代币的余额，避免清空其他代币的余额信息
+        fetchTokenBalances(fromAddress, selectedToken === 'BNB' ? ['BNB'] : [selectedToken])
+          .then(newBalances => {
+            // 合并新旧余额，保留已存在的代币余额
+            setTokenBalances(prevBalances => {
+              const balanceMap = new Map(prevBalances.map(b => [b.symbol, b]));
+              // 更新或添加新余额
+              newBalances.forEach(b => {
+                balanceMap.set(b.symbol, b);
+              });
+              return Array.from(balanceMap.values());
+            });
+          })
+          .catch(err => {
+            console.warn('刷新余额失败:', err);
+            // 刷新失败时保留原有余额，不清空
+          });
       }
     } catch (err) {
       console.error('❌ 转账异常:', err);
       setError(err instanceof Error ? err.message : '转账失败');
-    } finally {
-      console.log('🏁 转账流程结束');
       setLoading(false);
+      
+        // 转账异常时也刷新余额
+        // 只刷新选中代币的余额，避免清空其他代币的余额信息
+        fetchTokenBalances(fromAddress, selectedToken === 'BNB' ? ['BNB'] : [selectedToken])
+          .then(newBalances => {
+            // 合并新旧余额，保留已存在的代币余额
+            setTokenBalances(prevBalances => {
+              const balanceMap = new Map(prevBalances.map(b => [b.symbol, b]));
+              // 更新或添加新余额
+              newBalances.forEach(b => {
+                balanceMap.set(b.symbol, b);
+              });
+              return Array.from(balanceMap.values());
+            });
+          })
+          .catch(err => {
+            console.warn('刷新余额失败:', err);
+            // 刷新失败时保留原有余额，不清空
+          });
+    }
+  };
+
+  // 检查交易状态
+  const checkTransactionStatus = async (hash: string) => {
+    if (!hash) return;
+    
+    setCheckingStatus(true);
+    try {
+      const response = await fetch(`/api/transfer/status?txHash=${encodeURIComponent(hash)}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setTxStatus(data.status);
+        
+        if (data.status === 'confirmed') {
+          setSuccess(`✅ 交易已确认！\n\n交易哈希: ${hash}`);
+          // 交易确认后刷新余额
+          fetchTokenBalances(fromAddress)
+            .then(balances => {
+              setTokenBalances(balances);
+            })
+            .catch(err => {
+              console.warn('刷新余额失败:', err);
+            });
+        } else if (data.status === 'failed') {
+          setError(`❌ 交易失败\n\n交易哈希: ${hash}`);
+          setTxStatus('failed');
+        } else if (data.status === 'pending') {
+          setSuccess(`交易等待确认中...\n\n交易哈希: ${hash}\n\n状态: 待确认`);
+        }
+      } else {
+        console.error('检查交易状态失败:', data.error);
+      }
+    } catch (err) {
+      console.error('检查交易状态异常:', err);
+    } finally {
+      setCheckingStatus(false);
     }
   };
 
@@ -328,15 +452,52 @@ const TradePageClient: React.FC = () => {
                   </div>
                 )}
 
-                {/* 成功提示 */}
-                {success && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
-                    <p className="text-sm text-green-800">{success}</p>
-                    {txHash && (
-                      <p className="text-xs text-green-700 font-mono break-all">
-                        交易哈希: {txHash}
+                {/* 交易状态显示 */}
+                {txHash && (
+                  <div className={`p-4 border rounded-lg space-y-3 ${
+                    txStatus === 'confirmed' 
+                      ? 'bg-green-50 border-green-200' 
+                      : txStatus === 'failed'
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-yellow-50 border-yellow-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className={`text-sm font-semibold ${
+                          txStatus === 'confirmed' 
+                            ? 'text-green-800' 
+                            : txStatus === 'failed'
+                            ? 'text-red-800'
+                            : 'text-yellow-800'
+                        }`}>
+                          {txStatus === 'confirmed' && '✅ 交易已确认'}
+                          {txStatus === 'failed' && '❌ 交易失败'}
+                          {txStatus === 'pending' && '⏳ 等待确认中...'}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1 font-mono break-all">
+                          交易哈希: {txHash}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => checkTransactionStatus(txHash)}
+                        disabled={checkingStatus}
+                        className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors"
+                      >
+                        {checkingStatus ? '检查中...' : '刷新状态'}
+                      </button>
+                    </div>
+                    {txStatus === 'pending' && (
+                      <p className="text-xs text-yellow-700">
+                        ⚠️ 请等待交易确认后再进行下一次转账
                       </p>
                     )}
+                  </div>
+                )}
+
+                {/* 成功提示（无交易哈希时显示） */}
+                {success && !txHash && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-800">{success}</p>
                   </div>
                 )}
 
@@ -455,10 +616,14 @@ const TradePageClient: React.FC = () => {
                 {/* 转账按钮 */}
                 <button
                   onClick={handleTransfer}
-                  disabled={loading || !fromAddress || !toAddress || !amount}
+                  disabled={loading || !fromAddress || !toAddress || !amount || txStatus === 'pending'}
                   className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
                 >
-                  {loading ? '转账中...' : '确认转账'}
+                  {loading 
+                    ? '转账中...' 
+                    : txStatus === 'pending' 
+                    ? '等待交易确认...' 
+                    : '确认转账'}
                 </button>
               </div>
             </div>

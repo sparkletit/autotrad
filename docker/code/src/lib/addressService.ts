@@ -108,10 +108,17 @@ export const fetchCustomTokens = async (): Promise<CustomToken[]> => {
 
 /**
  * 获取账户余额
+ * @param address 账户地址
+ * @param tokens 可选，要查询的代币符号列表，如 ['BNB', 'USDT']。如果不提供，只查询 BNB
  */
-export const fetchTokenBalances = async (address: string) => {
+export const fetchTokenBalances = async (address: string, tokens?: string[]) => {
   try {
-    const response = await fetch(`/api/accounts/${address}/balances`);
+    // 构建查询参数
+    const tokensParam = tokens && tokens.length > 0 
+      ? tokens.join(',') 
+      : 'BNB'; // 默认只查询 BNB
+    
+    const response = await fetch(`/api/accounts/${address}/balances?tokens=${encodeURIComponent(tokensParam)}`);
     const data = await response.json();
     if (data.success) {
       return data.data || [];
