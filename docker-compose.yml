@@ -18,7 +18,7 @@ services:
       - web3_network
     restart: unless-stopped
     extra_hosts:
-      - "host.docker.internal:host-gateway"  # 允许容器访问宿主机
+      - "host.docker.internal:0.0.0.0"  # 允许容器访问宿主机
     environment:
       # Anvil RPC 地址（容器内）
       - ANVIL_RPC_URL=http://localhost:8545

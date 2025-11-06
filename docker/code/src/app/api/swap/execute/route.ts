@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, createWalletClient, http, parseUnits, formatUnits } from 'viem';
+import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, encodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { bsc } from 'viem/chains';
 import { Hex } from 'viem';
@@ -76,6 +76,7 @@ function getAmountOut(amountIn: bigint, reserveIn: bigint, reserveOut: bigint): 
  * 在链上真实执行 Swap 交易
  */
 export async function POST(request: NextRequest) {
+  let debugCtx: Record<string, any> | undefined;
   try {
     const body = await request.json();
     const {
@@ -88,6 +89,11 @@ export async function POST(request: NextRequest) {
       slippage = '0.5',
       network = 'fork',
     } = body;
+
+    // 累积调试上下文（仅用于返回/日志，避免泄露敏感信息）
+    debugCtx = {
+      input: { account, pairAddress, tokenIn, tokenOut, amountIn, slippage, network },
+    };
 
     if (!account || !pairAddress || !tokenIn || !tokenOut || !amountIn) {
       return NextResponse.json(
@@ -111,6 +117,7 @@ export async function POST(request: NextRequest) {
     
     // 2. 创建账户和客户端（无超时限制）
     const rpcUrl = getRpcUrl(network);
+    debugCtx.rpcUrl = rpcUrl;
     const accountSigner = privateKeyToAccount(privateKey as Hex);
     
     const transport = http(rpcUrl, {
@@ -157,14 +164,43 @@ export async function POST(request: NextRequest) {
 
     const [reserve0, reserve1] = reserves as [bigint, bigint, number];
 
+    debugCtx.pair = { token0, token1 };
     console.log('Pair 信息:');
     console.log('- Token0:', token0, '储备:', reserve0.toString());
     console.log('- Token1:', token1, '储备:', reserve1.toString());
+    debugCtx.reserves = { reserve0: reserve0.toString(), reserve1: reserve1.toString() };
 
     // 确定输入输出顺序
     const isToken0In = tokenIn.toLowerCase() === token0.toLowerCase();
     const reserveIn = isToken0In ? reserve0 : reserve1;
     const reserveOut = isToken0In ? reserve1 : reserve0;
+    debugCtx.path = { isToken0In };
+
+    // 账户余额与基础信息调试
+    try {
+      const nativeBalance = await publicClient.getBalance({ address: account as Hex });
+      console.log('账户原生币余额(Wei):', nativeBalance.toString());
+      debugCtx.balances = { native: nativeBalance.toString() };
+    } catch (e) {
+      console.warn('⚠️ 获取账户原生币余额失败:', e);
+    }
+    try {
+      if (tokenIn !== '0x0000000000000000000000000000000000000000') {
+        const erc20Balance = await publicClient.readContract({
+          address: tokenIn as Hex,
+          abi: [
+            { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
+            { name: 'symbol', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'string' }] },
+          ] as const,
+          functionName: 'balanceOf',
+          args: [account as Hex],
+        }) as bigint;
+        console.log('账户代币余额(Wei):', erc20Balance.toString());
+        debugCtx.balances = { ...(debugCtx.balances || {}), erc20In: erc20Balance.toString() };
+      }
+    } catch (e) {
+      console.warn('⚠️ 获取账户代币余额失败:', e);
+    }
 
     // 获取代币精度
     let decimalsIn = 18;
@@ -184,14 +220,25 @@ export async function POST(request: NextRequest) {
         functionName: 'decimals',
       }) as number;
     }
+    debugCtx.decimals = { in: decimalsIn, out: decimalsOut };
 
     // 转换输入数量
     const amountInWei = parseUnits(amountIn, decimalsIn);
     console.log('输入数量 (Wei):', amountInWei.toString());
+    debugCtx.amounts = { amountInWei: amountInWei.toString() };
 
     // 计算输出数量
     const amountOutWei = getAmountOut(amountInWei, reserveIn, reserveOut);
     console.log('计算输出数量 (Wei):', amountOutWei.toString());
+    debugCtx.amounts.amountOutWei = amountOutWei.toString();
+
+    if (amountOutWei === BigInt(0)) {
+      console.error('❌ 计算得到的输出为 0，可能是储备极低或数量过小');
+      return NextResponse.json(
+        { success: false, error: '计算得到的输出为 0；检查储备、输入数量与滑点设置' },
+        { status: 400 }
+      );
+    }
 
     // 应用滑点
     // auto = 0（接受任何数量），其他为用户指定的百分比
@@ -201,6 +248,7 @@ export async function POST(request: NextRequest) {
       : (amountOutWei * BigInt(Math.floor((100 - slippageNum) * 100))) / BigInt(10000);
     
     console.log('最小输出 (含滑点):', amountOutMin.toString());
+    debugCtx.amounts.amountOutMin = amountOutMin.toString();
     if (slippageNum === 0) {
       console.log('滑点模式: AUTO (接受任何数量)');
     } else {
@@ -210,6 +258,25 @@ export async function POST(request: NextRequest) {
     // 如果是 ERC20，先转账到 Pair
     if (tokenIn !== '0x0000000000000000000000000000000000000000') {
       console.log('转账代币到 Pair...');
+      // 预估/模拟 transfer 调用，便于提前捕获 revert 原因
+      try {
+        const gasForTransfer = await publicClient.estimateGas({
+          account: accountSigner,
+          to: tokenIn as Hex,
+          data: encodeFunctionData({
+            abi: [
+              { name: 'transfer', type: 'function', stateMutability: 'nonpayable', inputs: [ { name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' } ], outputs: [ { name: '', type: 'bool' } ] },
+            ] as const,
+            functionName: 'transfer',
+            args: [pairAddress as Hex, amountInWei],
+          }),
+        });
+        console.log('transfer 估算 Gas:', gasForTransfer.toString());
+        debugCtx.gasEstimates = { ...(debugCtx.gasEstimates || {}), transfer: gasForTransfer.toString() };
+      } catch (e) {
+        console.warn('⚠️ transfer 估算 Gas 失败，可能会在发送时被拒绝:', e);
+        debugCtx.gasEstimates = { ...(debugCtx.gasEstimates || {}), transfer: 'failed' };
+      }
       
       const ERC20_TRANSFER_ABI = [
         {
@@ -234,16 +301,37 @@ export async function POST(request: NextRequest) {
       
       console.log('✅ 转账交易已发送:', transferHash);
       
-      // 异步后台等待转账确认（不阻塞响应）
-      publicClient.waitForTransactionReceipt({ hash: transferHash }).then((transferReceipt) => {
-        if (transferReceipt.status !== 'success') {
-          console.error('❌ 代币转账失败（已被 revert）:', transferHash);
-        } else {
-          console.log('✅ 代币转账确认成功:', transferHash);
+      // ⚠️ 重要：必须等待转账确认后再执行 swap，否则 Pair 合约还没有收到代币
+      console.log('⏳ 等待代币转账确认...');
+      const transferReceipt = await publicClient.waitForTransactionReceipt({ hash: transferHash });
+      
+      if (transferReceipt.status !== 'success') {
+        console.error('❌ 代币转账失败（已被 revert）:', transferHash);
+        throw new Error('代币转账失败，无法继续执行 swap');
+      }
+      
+      console.log('✅ 代币转账确认成功:', transferHash);
+      
+      // 验证 Pair 合约确实收到了代币
+      try {
+        const ERC20_BALANCE_ABI = [
+          { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
+        ] as const;
+        const pairBalance = await publicClient.readContract({
+          address: tokenIn as Hex,
+          abi: ERC20_BALANCE_ABI,
+          functionName: 'balanceOf',
+          args: [pairAddress as Hex],
+        }) as bigint;
+        console.log('Pair 合约代币余额:', pairBalance.toString());
+        debugCtx.pairTokenBalance = pairBalance.toString();
+        
+        if (pairBalance < amountInWei) {
+          console.warn('⚠️ Pair 合约余额可能不足，但继续尝试 swap');
         }
-      }).catch((err) => {
-        console.error('❌ 等待代币转账确认时出错:', err);
-      });
+      } catch (e) {
+        console.warn('⚠️ 无法验证 Pair 合约余额:', e);
+      }
     }
 
     // 调用 Pair 的 swap() 方法
@@ -274,6 +362,26 @@ export async function POST(request: NextRequest) {
     ] as const;
     
     console.log('执行 Swap 交易...');
+
+    // 在真正发送前尝试 simulate/estimate，提前发现会 revert 的情况
+    try {
+      const estimatedGas = await publicClient.estimateGas({
+        account: accountSigner,
+        to: pairAddress as Hex,
+        data: encodeFunctionData({
+          abi: [
+            { name: 'swap', type: 'function', stateMutability: 'nonpayable', inputs: [ { name: 'amount0Out', type: 'uint256' }, { name: 'amount1Out', type: 'uint256' }, { name: 'to', type: 'address' }, { name: 'data', type: 'bytes' } ], outputs: [] },
+          ] as const,
+          functionName: 'swap',
+          args: [ BigInt(amount0Out), BigInt(amount1Out), account as Hex, '0x' as Hex ],
+        }),
+      });
+      console.log('swap 估算 Gas:', estimatedGas.toString());
+      debugCtx.gasEstimates = { ...(debugCtx.gasEstimates || {}), swap: estimatedGas.toString() };
+    } catch (e) {
+      console.error('❌ swap 估算 Gas 失败，交易大概率会被拒绝:', e);
+      debugCtx.gasEstimates = { ...(debugCtx.gasEstimates || {}), swap: 'failed' };
+    }
     
     // 使用 viem 的 writeContract（自动签名）
     const txHash = await walletClient.writeContract({
@@ -329,17 +437,41 @@ export async function POST(request: NextRequest) {
         tip: `使用 cast tx ${txHash} --rpc-url http://anvil-api:8545 查看交易详情`,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Swap 执行失败:', error);
+    
+    // 尝试提取详细的 revert 原因
+    let detailedError = '';
+    if (error?.reason) {
+      detailedError = error.reason;
+      console.error('Revert 原因:', error.reason);
+    } else if (error?.shortMessage) {
+      // viem 的错误格式：提取 revert reason
+      const reasonMatch = error.shortMessage.match(/reverted with the following reason:\s*(.+?)(?:\n|$)/i);
+      if (reasonMatch) {
+        detailedError = reasonMatch[1].trim();
+        console.error('提取的 Revert 原因:', detailedError);
+      }
+    }
     
     // 使用统一的错误解读函数
     const friendlyErrorMessage = parseBlockchainError(error);
     console.error('解读后的错误:', friendlyErrorMessage);
     
+    // 如果提取到了详细的 revert 原因，添加到错误信息中
+    const finalErrorMessage = detailedError 
+      ? `${friendlyErrorMessage}\n\n详细原因: ${detailedError}`
+      : friendlyErrorMessage;
+    
     return NextResponse.json(
       {
         success: false,
-        error: friendlyErrorMessage,
+        error: finalErrorMessage,
+        debug: {
+          hint: '查看服务日志获取更详细的链上错误与上下文',
+          context: debugCtx,
+          revertReason: detailedError || undefined,
+        },
       },
       { status: 500 }
     );
