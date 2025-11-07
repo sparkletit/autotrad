@@ -22,6 +22,7 @@ interface FunctionTemplate {
   params_json: string;
   description: string | null;
   created_at: string;
+  is_preset?: number;
 }
 
 interface ABIFunction {
@@ -59,6 +60,7 @@ const CustomFunctionPage: React.FC = () => {
   const [result, setResult] = useState<any>(null);
 
   const [templates, setTemplates] = useState<FunctionTemplate[]>([]);
+  const [presetTemplates, setPresetTemplates] = useState<FunctionTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<FunctionTemplate | null>(null);
@@ -123,13 +125,83 @@ const CustomFunctionPage: React.FC = () => {
   const fetchTemplates = async () => {
     try {
       setLoadingTemplates(true);
-      const response = await fetch('/api/custom-functions');
-      const data = await response.json();
-      if (data.success) {
-        setTemplates(data.data || []);
+      // 获取历史模板（排除预制模板）
+      const historyResponse = await fetch('/api/custom-functions?exclude_preset=true');
+      const historyData = await historyResponse.json();
+      if (historyData.success) {
+        setTemplates(historyData.data || []);
+      }
+      
+      // 获取预制模板
+      const presetResponse = await fetch('/api/custom-functions?preset_only=true');
+      const presetData = await presetResponse.json();
+      if (presetData.success) {
+        setPresetTemplates(presetData.data || []);
       }
     } catch (err) {
       console.error('获取模板列表失败:', err);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handleMigrate = async () => {
+    if (!confirm('确定要执行数据库迁移吗？这将添加 is_preset 字段到数据库表中。')) {
+      return;
+    }
+    
+    try {
+      setLoadingTemplates(true);
+      const response = await fetch('/api/custom-functions/migrate', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (data.success) {
+        if (data.data.migrated) {
+          setSuccess('数据库迁移成功！现在可以初始化预制模板了。');
+        } else {
+          setSuccess('数据库已是最新版本，无需迁移。');
+        }
+        await fetchTemplates();
+      } else {
+        setError(data.error || '迁移失败');
+      }
+    } catch (err) {
+      console.error('数据库迁移失败:', err);
+      setError('数据库迁移失败');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handleInitPresets = async () => {
+    if (!confirm('确定要初始化预制模板吗？这将删除所有现有的预制模板并重新创建。')) {
+      return;
+    }
+    
+    try {
+      setLoadingTemplates(true);
+      const response = await fetch('/api/custom-functions/init-presets', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSuccess(`成功初始化 ${data.data.count} 个预制模板`);
+        await fetchTemplates();
+      } else {
+        setError(data.error || '初始化失败');
+        // 如果是因为缺少字段，提示用户执行迁移
+        if (data.error && data.error.includes('is_preset')) {
+          setTimeout(() => {
+            if (confirm('需要先执行数据库迁移。是否现在执行？')) {
+              handleMigrate();
+            }
+          }, 1000);
+        }
+      }
+    } catch (err) {
+      console.error('初始化预制模板失败:', err);
+      setError('初始化预制模板失败');
     } finally {
       setLoadingTemplates(false);
     }
@@ -240,8 +312,11 @@ const CustomFunctionPage: React.FC = () => {
     setAbiContent(template.abi_content);
   };
 
-  const handleDeleteTemplate = async (id: number) => {
-    if (!confirm('确定要删除此模板吗？')) return;
+  const handleDeleteTemplate = async (id: number, isPreset: boolean = false) => {
+    const message = isPreset 
+      ? '确定要删除此预制模板吗？' 
+      : '确定要删除此模板吗？';
+    if (!confirm(message)) return;
 
     try {
       const response = await fetch(`/api/custom-functions?id=${id}`, {
@@ -249,10 +324,45 @@ const CustomFunctionPage: React.FC = () => {
       });
       const data = await response.json();
       if (data.success) {
+        setSuccess('模板删除成功');
         await fetchTemplates();
+      } else {
+        setError(data.error || '删除失败');
       }
     } catch (err) {
       console.error('删除模板失败:', err);
+      setError('删除模板失败');
+    }
+  };
+
+  const handleMigrateToPreset = async (templateId: number) => {
+    if (!confirm('确定要将此历史模板迁移到预制模板吗？如果已存在相同的预制模板，将更新其参数。')) {
+      return;
+    }
+
+    try {
+      setLoadingTemplates(true);
+      const response = await fetch('/api/custom-functions/migrate-to-preset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        if (data.data.updated) {
+          setSuccess('模板已迁移到预制模板，并更新了已存在的预制模板参数');
+        } else {
+          setSuccess('模板已迁移到预制模板');
+        }
+        await fetchTemplates();
+      } else {
+        setError(data.error || '迁移失败');
+      }
+    } catch (err) {
+      console.error('迁移模板失败:', err);
+      setError('迁移模板失败');
+    } finally {
+      setLoadingTemplates(false);
     }
   };
 
@@ -541,15 +651,99 @@ const CustomFunctionPage: React.FC = () => {
                 </div>
               )}
 
+              {/* 预制模板 */}
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">预制模板</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleMigrate}
+                      disabled={loadingTemplates}
+                      className="px-3 py-1 text-xs bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 text-white rounded transition-colors"
+                      title="执行数据库迁移"
+                    >
+                      迁移
+                    </button>
+                    <button
+                      onClick={handleInitPresets}
+                      disabled={loadingTemplates}
+                      className="px-3 py-1 text-xs bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded transition-colors"
+                      title="初始化预制模板"
+                    >
+                      初始化
+                    </button>
+                  </div>
+                </div>
+
+                {loadingTemplates ? (
+                  <p className="text-sm text-gray-500 text-center py-4">加载中...</p>
+                ) : presetTemplates.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-500 mb-2">暂无预制模板</p>
+                    <button
+                      onClick={handleInitPresets}
+                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      点击初始化预制模板
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                    {presetTemplates.map((template) => (
+                      <div
+                        key={template.id}
+                        className="p-4 border border-green-200 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-green-200 text-green-800 text-xs font-semibold rounded">
+                                  预制
+                                </span>
+                                <p className="text-sm font-semibold text-gray-900">
+                                  {template.function_name}
+                                </p>
+                              </div>
+                              {template.description && (
+                                <p className="text-xs text-gray-600 mt-1">{template.description}</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleDeleteTemplate(template.id, true)}
+                              className="text-red-500 hover:text-red-700 text-xs ml-2"
+                              title="删除预制模板"
+                            >
+                              删除
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500 font-mono">
+                            合约: {template.contract_address.slice(0, 6)}...
+                            {template.contract_address.slice(-4)}
+                          </p>
+                          <button
+                            onClick={() => handleLoadTemplate(template)}
+                            className="w-full mt-2 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors"
+                          >
+                            加载模板
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 历史模板 */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">历史模板</h3>
 
                 {loadingTemplates ? (
                   <p className="text-sm text-gray-500 text-center py-4">加载中...</p>
                 ) : templates.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-4">暂无模板</p>
+                  <p className="text-sm text-gray-500 text-center py-4">暂无历史模板</p>
                 ) : (
-                  <div className="space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto">
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto">
                     {templates.map((template) => (
                       <div
                         key={template.id}
@@ -565,12 +759,22 @@ const CustomFunctionPage: React.FC = () => {
                                 <p className="text-xs text-gray-600 mt-1">{template.description}</p>
                               )}
                             </div>
-                            <button
-                              onClick={() => handleDeleteTemplate(template.id)}
-                              className="text-red-500 hover:text-red-700 text-xs ml-2"
-                            >
-                              删除
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleMigrateToPreset(template.id)}
+                                className="text-green-600 hover:text-green-800 text-xs"
+                                title="迁移到预制模板"
+                              >
+                                迁移
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTemplate(template.id)}
+                                className="text-red-500 hover:text-red-700 text-xs"
+                                title="删除模板"
+                              >
+                                删除
+                              </button>
+                            </div>
                           </div>
                           <p className="text-xs text-gray-500 font-mono">
                             合约: {template.contract_address.slice(0, 6)}...
