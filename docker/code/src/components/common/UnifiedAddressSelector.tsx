@@ -29,11 +29,11 @@ interface UnifiedAddressSelectorProps {
   disabled?: boolean;
 }
 
-type TabType = 'accounts' | 'aliases' | 'tokens';
+type TabType = 'accounts' | 'aliases' | 'tokens' | 'custom';
 
 /**
  * 统一地址选择下拉框组件
- * 打开时显示三个标签页：地址本、交易池、代币
+ * 打开时显示四个标签页：地址本、交易池、代币、自定义地址
  * 用户在标签页之间自由切换选择
  */
 const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
@@ -47,6 +47,7 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedLabel, setSelectedLabel] = useState('');
+  const [customAddress, setCustomAddress] = useState('');
 
   // 标签页数据
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -149,6 +150,18 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSearchText('');
+    if (tab === 'custom') {
+      // 如果当前值是自定义地址（不在其他标签页中），显示在输入框中
+      if (value && 
+          value.match(/^0x[a-fA-F0-9]{40}$/) &&
+          !accounts.find(a => a.address.toLowerCase() === value.toLowerCase()) &&
+          !aliases.find(a => a.address.toLowerCase() === value.toLowerCase()) &&
+          !tokens.find(t => t.address.toLowerCase() === value.toLowerCase())) {
+        setCustomAddress(value);
+      } else {
+        setCustomAddress('');
+      }
+    }
     if (tab === 'accounts' && accounts.length === 0) fetchAccounts();
     else if (tab === 'aliases' && aliases.length === 0) fetchAliases();
     else if (tab === 'tokens' && tokens.length === 0) fetchTokens();
@@ -221,10 +234,75 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
     accounts: { label: '地址本', icon: '👤', count: accounts.length },
     aliases: { label: '交易池', icon: '🔄', count: aliases.length },
     tokens: { label: '代币', icon: '💎', count: tokens.length },
+    custom: { label: '自定义', icon: '✏️', count: 0 },
+  };
+
+  // 处理自定义地址输入
+  const handleCustomAddressSubmit = () => {
+    const trimmedAddress = customAddress.trim();
+    if (!trimmedAddress) {
+      return;
+    }
+    
+    // 验证地址格式
+    if (!trimmedAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+      alert('无效的以太坊地址格式（应以0x开头，长度为42）');
+      return;
+    }
+    
+    onChange(trimmedAddress, '自定义地址');
+    setIsOpen(false);
+    setCustomAddress('');
+    setSearchText('');
   };
 
   // 渲染选项列表
   const renderOptions = () => {
+    // 自定义地址标签页
+    if (activeTab === 'custom') {
+      return (
+        <div className="p-4">
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              输入自定义地址
+            </label>
+            <input
+              type="text"
+              value={customAddress}
+              onChange={(e) => setCustomAddress(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleCustomAddressSubmit();
+                }
+              }}
+              placeholder="0x..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              请输入有效的以太坊地址（以0x开头，长度为42）
+            </p>
+          </div>
+          <button
+            onClick={handleCustomAddressSubmit}
+            disabled={!customAddress.trim() || !customAddress.trim().match(/^0x[a-fA-F0-9]{40}$/)}
+            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+          >
+            确认使用
+          </button>
+          {value && value.match(/^0x[a-fA-F0-9]{40}$/) && 
+           !accounts.find(a => a.address.toLowerCase() === value.toLowerCase()) &&
+           !aliases.find(a => a.address.toLowerCase() === value.toLowerCase()) &&
+           !tokens.find(t => t.address.toLowerCase() === value.toLowerCase()) && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-800 font-semibold mb-1">当前使用的自定义地址：</p>
+              <p className="text-xs font-mono text-blue-900 break-all">{value}</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     let options: any[] = [];
     let filtered: any[] = [];
 
@@ -374,17 +452,19 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
             ))}
           </div>
 
-          {/* 搜索框 */}
-          <div className="border-b border-gray-200 p-2 sticky top-11 bg-white">
-            <input
-              type="text"
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              placeholder={`搜索${tabConfig[activeTab].label}...`}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus
-            />
-          </div>
+          {/* 搜索框（自定义地址标签页不显示搜索框） */}
+          {activeTab !== 'custom' && (
+            <div className="border-b border-gray-200 p-2 sticky top-11 bg-white">
+              <input
+                type="text"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder={`搜索${tabConfig[activeTab].label}...`}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+            </div>
+          )}
 
           {/* 选项列表 */}
           <div className="overflow-y-auto flex-1">

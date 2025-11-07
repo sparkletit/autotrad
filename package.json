@@ -3,5 +3,8 @@
     "@nomicfoundation/hardhat-network-helpers": "^1.1.2",
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
     "hardhat": "^2.26.5"
+  },
+  "dependencies": {
+    "web3": "^4.16.0"
   }
 }

@@ -1,22 +1,22 @@
 #!/bin/bash
 
 # PancakeSwap V2 Pair Swap 脚本
-# 使用 200万个 Token1 换 Token0
+# 使用 WBNB (Token0) 换 SHReK (Token1)
 
 # 配置参数
-PAIR_ADDRESS="0xae81e69aa1e4f18eafd8a34c78d406af8fa65360"
+PAIR_ADDRESS="0xc3311152e8c75fe80db5debf2008dd3f4fc2e121"
 SENDER_ADDRESS="0x73a56a2e0678bd275fC841191EDfF2f6A724F2b2"
-TO_ADDRESS="0xf9eb1239D1ab5A5B3D176bFE7F4F5875407B2e86"
-TOKEN1_AMOUNT="11000000000000000000000000"  # 1100万个 Token1 (假设18位小数，即 2000000 * 10^18)
+TO_ADDRESS="0x0193ED902BB984725c7AB939719FAD465a22C5A0"
+TOKEN0_AMOUNT="10000000000000000000000"  # 10000个 WBNB (18位小数，即 1 * 10^18)
 
 # 可选: 如果无法自动获取，可以手动指定 token 地址
 # 如果本地 fork 链上合约不存在，取消下面的注释并填入正确的地址
-TOKEN0_ADDRESS="0x6a06Fc86F278F5B3a4E7Fd9297fD59fc2Dc99999"
-TOKEN1_ADDRESS="0xC0EdcDdd6d5417c22467e3d5642Efa1820E454f8"
+TOKEN0_ADDRESS="0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
+TOKEN1_ADDRESS="0xf739849D8B545f6F48424BCD75d34E1e0d655283"
 
 # 设置默认 RPC_URL
 RPC_URL=${RPC_URL:-"http://localhost:8545"}
-
+PRIVATE_KEY=${PRIVATE_KEY:="0x6f9a6acbdbcf3d7ecd558014c3b7f05f51304489658083974427d4c4ba5f7516"}
 # 检查 PRIVATE_KEY 是否设置
 if [ -z "$PRIVATE_KEY" ]; then
     echo "警告: PRIVATE_KEY 未设置，将只显示命令"
@@ -32,7 +32,7 @@ echo "RPC URL: $RPC_URL"
 echo "Pair 地址: $PAIR_ADDRESS"
 echo "发送者地址: $SENDER_ADDRESS"
 echo "接收者地址: $TO_ADDRESS"
-echo "Token1 数量: $TOKEN1_AMOUNT (200万个)"
+echo "WBNB (Token0) 数量: $TOKEN0_AMOUNT"
 echo ""
 
 # 步骤1: 获取 Token0 和 Token1 地址
@@ -109,19 +109,19 @@ if [ "$TO_ADDRESS_LOWER" = "$TOKEN0_LOWER" ] || [ "$TO_ADDRESS_LOWER" = "$TOKEN1
 fi
 echo ""
 
-# 步骤2: 检查 Token1 余额
-echo "步骤2: 检查 Token1 余额..."
-BALANCE=$(cast call $TOKEN1_ADDRESS "balanceOf(address)(uint256)" $SENDER_ADDRESS --rpc-url $RPC_URL 2>/dev/null)
-echo "当前 Token1 余额: $BALANCE"
+# 步骤2: 检查 WBNB (Token0) 余额
+echo "步骤2: 检查 WBNB (Token0) 余额..."
+BALANCE=$(cast call $TOKEN0_ADDRESS "balanceOf(address)(uint256)" $SENDER_ADDRESS --rpc-url $RPC_URL 2>/dev/null)
+echo "当前 WBNB 余额: $BALANCE"
 if [ ! -z "$BALANCE" ] && [ "$BALANCE" != "0" ]; then
     BALANCE_DECIMAL=$(cast --to-dec $BALANCE 2>/dev/null || echo "N/A")
     echo "余额 (十进制): $BALANCE_DECIMAL"
 fi
 echo ""
 
-# 步骤3: 授权 pair 合约使用 Token1
-echo "步骤3: 授权 pair 合约使用 Token1..."
-APPROVE_CMD="cast send $TOKEN1_ADDRESS \"approve(address,uint256)\" $PAIR_ADDRESS $TOKEN1_AMOUNT --rpc-url $RPC_URL"
+# 步骤3: 授权 pair 合约使用 WBNB (Token0)
+echo "步骤3: 授权 pair 合约使用 WBNB (Token0)..."
+APPROVE_CMD="cast send $TOKEN0_ADDRESS \"approve(address,uint256)\" $PAIR_ADDRESS $TOKEN0_AMOUNT --rpc-url $RPC_URL"
 if [ "$DRY_RUN" = false ]; then
     APPROVE_CMD="$APPROVE_CMD --private-key $PRIVATE_KEY"
     echo "执行: $APPROVE_CMD"
@@ -196,37 +196,37 @@ echo "Reserve0 (Token0): $RESERVE0"
 echo "Reserve1 (Token1): $RESERVE1"
 echo ""
 
-# 计算能换到多少 Token0 (使用恒定乘积公式，考虑手续费)
-# PancakeSwap V2 使用 0.25% 手续费，公式: amount0Out = (amount1In * 9975 * reserve0) / ((reserve1 * 10000) + (amount1In * 9975))
-echo "步骤5: 计算可换到的 Token0 数量..."
-AMOUNT0_OUT=$(python3 <<EOF
-amount1_in = int('$TOKEN1_AMOUNT')
+# 计算能换到多少 SHReK (Token1) (使用恒定乘积公式，考虑手续费)
+# PancakeSwap V2 使用 0.25% 手续费，公式: amount1Out = (amount0In * 9975 * reserve1) / ((reserve0 * 10000) + (amount0In * 9975))
+echo "步骤5: 计算可换到的 SHReK (Token1) 数量..."
+AMOUNT1_OUT=$(python3 <<EOF
+amount0_in = int('$TOKEN0_AMOUNT')
 reserve0 = int('$RESERVE0')
 reserve1 = int('$RESERVE1')
 
 # PancakeSwap V2 使用 0.25% 手续费 (9975/10000)
-# 公式: amount0Out = (amount1In * 9975 * reserve0) / ((reserve1 * 10000) + (amount1In * 9975))
-numerator = amount1_in * 9975 * reserve0
-denominator = (reserve1 * 10000) + (amount1_in * 9975)
-amount0_out = numerator // denominator
+# 公式: amount1Out = (amount0In * 9975 * reserve1) / ((reserve0 * 10000) + (amount0In * 9975))
+numerator = amount0_in * 9975 * reserve1
+denominator = (reserve0 * 10000) + (amount0_in * 9975)
+amount1_out = numerator // denominator
 
 # 设置 1% 滑点保护 (实际输出可能略少)
-amount0_out_min = int(amount0_out * 0.99)
-print(amount0_out_min)
+amount1_out_min = int(amount1_out * 0.99)
+print(amount1_out_min)
 EOF
 )
 
-if [ -z "$AMOUNT0_OUT" ] || [ "$AMOUNT0_OUT" = "0" ]; then
+if [ -z "$AMOUNT1_OUT" ] || [ "$AMOUNT1_OUT" = "0" ]; then
     echo "错误: 无法计算输出数量，可能池子储备不足"
     exit 1
 fi
 
-echo "预计可换到 Token0: $AMOUNT0_OUT (已考虑 1% 滑点保护)"
+echo "预计可换到 SHReK (Token1): $AMOUNT1_OUT (已考虑 1% 滑点保护)"
 echo ""
 
-# 步骤6: 将 Token1 转账到 pair 合约
-echo "步骤6: 将 Token1 转账到 pair 合约..."
-TRANSFER_CMD="cast send $TOKEN1_ADDRESS \"transfer(address,uint256)\" $PAIR_ADDRESS $TOKEN1_AMOUNT --rpc-url $RPC_URL"
+# 步骤6: 将 WBNB (Token0) 转账到 pair 合约
+echo "步骤6: 将 WBNB (Token0) 转账到 pair 合约..."
+TRANSFER_CMD="cast send $TOKEN0_ADDRESS \"transfer(address,uint256)\" $PAIR_ADDRESS $TOKEN0_AMOUNT --rpc-url $RPC_URL"
 if [ "$DRY_RUN" = false ]; then
     TRANSFER_CMD="$TRANSFER_CMD --private-key $PRIVATE_KEY"
     echo "执行: $TRANSFER_CMD"
@@ -236,14 +236,14 @@ else
 fi
 echo ""
 
-# 步骤7: 执行 swap (用 Token1 换 Token0)
+# 步骤7: 执行 swap (用 WBNB 换 SHReK)
 # swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)
-# amount0Out: 要输出的 Token0 数量 (必须 > 0)
-# amount1Out: 0 (因为我们要输入 Token1，不是输出 Token1)
+# amount0Out: 0 (因为我们要输入 WBNB，不是输出 WBNB)
+# amount1Out: 要输出的 SHReK (Token1) 数量 (必须 > 0)
 # to: 接收地址
 # data: 空字节 "0x"
-echo "步骤7: 执行 swap 操作 (用 Token1 换 Token0)..."
-SWAP_CMD="cast send $PAIR_ADDRESS \"swap(uint256,uint256,address,bytes)\" $AMOUNT0_OUT 0 $TO_ADDRESS \"0x\" --rpc-url $RPC_URL"
+echo "步骤7: 执行 swap 操作 (用 WBNB 换 SHReK)..."
+SWAP_CMD="cast send $PAIR_ADDRESS \"swap(uint256,uint256,address,bytes)\" 0 $AMOUNT1_OUT $TO_ADDRESS \"0x\" --rpc-url $RPC_URL"
 if [ "$DRY_RUN" = false ]; then
     SWAP_CMD="$SWAP_CMD --private-key $PRIVATE_KEY"
     echo "执行: $SWAP_CMD"

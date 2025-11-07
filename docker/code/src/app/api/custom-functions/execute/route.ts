@@ -202,33 +202,47 @@ export async function POST(request: NextRequest) {
 
     // ... existing code ...
     
-    // 构建交易选项
+    // 检查函数是否是只读函数（view 或 pure）
+    const isReadOnly = functionAbi && (
+      functionAbi.stateMutability === 'view' || 
+      functionAbi.stateMutability === 'pure'
+    );
+    
+    // 构建交易选项（只读函数不需要交易选项）
     const txOptions: any = {};
-    if (gas_limit && gas_limit !== 'auto') {
-      txOptions.gasLimit = BigInt(gas_limit);
-    }
-    if (value) {
-      txOptions.value = ethers.parseEther(value.toString());
-    }
+    if (!isReadOnly) {
+      if (gas_limit && gas_limit !== 'auto') {
+        txOptions.gasLimit = BigInt(gas_limit);
+      }
+      if (value) {
+        txOptions.value = ethers.parseEther(value.toString());
+      }
 
-    // 如果gas_limit是auto，则预估gas
-    if (gas_limit === 'auto') {
-      try {
-        const estimatedGas = await contract[function_name].estimateGas(...paramsArray, txOptions);
-        txOptions.gasLimit = (estimatedGas * 120n) / 100n; // 增加20%缓冲
-      } catch (e) {
-        console.error('Gas预估失败:', e);
-        // 使用默认值
-        txOptions.gasLimit = BigInt(3000000);
+      // 如果gas_limit是auto，则预估gas（只读函数不需要）
+      if (gas_limit === 'auto') {
+        try {
+          const estimatedGas = await contract[function_name].estimateGas(...paramsArray, txOptions);
+          txOptions.gasLimit = (estimatedGas * 120n) / 100n; // 增加20%缓冲
+        } catch (e) {
+          console.error('Gas预估失败:', e);
+          // 使用默认值
+          txOptions.gasLimit = BigInt(3000000);
+        }
       }
     }
 
     // 执行合约函数
     console.log('执行合约函数:', function_name);
+    console.log('函数类型:', isReadOnly ? '只读(view/pure)' : '状态修改');
     console.log('参数:', paramsArray);
-    console.log('交易选项:', txOptions);
+    if (!isReadOnly) {
+      console.log('交易选项:', txOptions);
+    }
     
-    const tx = await contract[function_name](...paramsArray, txOptions);
+    // 只读函数不传递 txOptions
+    const tx = isReadOnly 
+      ? await contract[function_name](...paramsArray)
+      : await contract[function_name](...paramsArray, txOptions);
     
     // 等待交易完成并获取交易回执
     // 检查tx是否是一个交易对象（有wait方法）

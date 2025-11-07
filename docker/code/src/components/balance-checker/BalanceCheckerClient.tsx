@@ -71,6 +71,12 @@ export default function BalanceCheckerClient() {
   const [success, setSuccess] = useState('');
   const [queriedAddress, setQueriedAddress] = useState('');
   const [isClient, setIsClient] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveLabel, setSaveLabel] = useState('');
+  const [savedRecords, setSavedRecords] = useState<any[]>([]);
+  const [currentRecordLabel, setCurrentRecordLabel] = useState<string | null>(null);
+  const [matchedRecords, setMatchedRecords] = useState<any[]>([]);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
 
   const networks = [
     { id: 'fork', name: 'Fork 网络' },
@@ -82,7 +88,79 @@ export default function BalanceCheckerClient() {
   // 标记组件已挂载到客户端
   useEffect(() => {
     setIsClient(true);
+    // 加载保存的记录
+    loadSavedRecords();
   }, []);
+
+  // 从localStorage加载保存的记录
+  const loadSavedRecords = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('balance-checker-records');
+        if (saved) {
+          setSavedRecords(JSON.parse(saved));
+        }
+      } catch (err) {
+        console.error('加载保存的记录失败:', err);
+      }
+    }
+  };
+
+  // 保存当前查询结果到localStorage
+  const handleSaveRecord = () => {
+    if (!saveLabel.trim()) {
+      setError('请输入标签名称');
+      return;
+    }
+    if (balances.length === 0) {
+      setError('没有可保存的查询结果');
+      return;
+    }
+
+    try {
+      const record = {
+        id: Date.now(),
+        label: saveLabel.trim(),
+        address: queriedAddress,
+        network: selectedNetwork,
+        balances: balances,
+        timestamp: new Date().toISOString(),
+      };
+
+      const existingRecords = savedRecords || [];
+      const updatedRecords = [...existingRecords, record];
+      
+      localStorage.setItem('balance-checker-records', JSON.stringify(updatedRecords));
+      setSavedRecords(updatedRecords);
+      setCurrentRecordLabel(saveLabel.trim());
+      setShowSaveDialog(false);
+      setSaveLabel('');
+      setSuccess(`记录已保存为"${saveLabel.trim()}"`);
+      
+      // 更新匹配的记录
+      const matched = updatedRecords.filter(
+        (r) => r.address.toLowerCase() === queriedAddress.toLowerCase() && r.network === selectedNetwork
+      );
+      setMatchedRecords(matched);
+    } catch (err) {
+      setError('保存记录失败: ' + (err instanceof Error ? err.message : '未知错误'));
+    }
+  };
+
+  // 清空所有保存的记录
+  const handleClearRecords = () => {
+    if (window.confirm('确定要清空所有保存的记录吗？此操作不可恢复。')) {
+      try {
+        localStorage.removeItem('balance-checker-records');
+        setSavedRecords([]);
+        setCurrentRecordLabel(null);
+        setMatchedRecords([]);
+        setSuccess('所有记录已清空');
+      } catch (err) {
+        setError('清空记录失败: ' + (err instanceof Error ? err.message : '未知错误'));
+      }
+    }
+  };
 
   // 页面加载时从数据库读取自定义代币和账号
 
@@ -156,7 +234,11 @@ export default function BalanceCheckerClient() {
       setSelectedTokens(new Set(['BNB']));
     } else {
       // 未全选，全选所有代币（包括BNB）
-      setSelectedTokens(new Set<string>());
+      const allTokenAddresses = new Set<string>(['BNB']);
+      customTokens.forEach(token => {
+        allTokenAddresses.add(token.address);
+      });
+      setSelectedTokens(allTokenAddresses);
     }
   };
 
@@ -196,6 +278,14 @@ export default function BalanceCheckerClient() {
       if (data.success) {
         setBalances(data.data.balances || []);
         setQueriedAddress(data.data.address);
+        setCurrentRecordLabel(null); // 清除当前记录标签
+        
+        // 查找匹配的历史记录（相同地址和网络）
+        const matched = savedRecords.filter(
+          (record) => record.address.toLowerCase() === data.data.address.toLowerCase() && record.network === selectedNetwork
+        );
+        setMatchedRecords(matched);
+        
         setSuccess(`成功查询 ${data.data.address} 的余额`);
       } else {
         setError(data.error || '查询失败');
@@ -312,10 +402,11 @@ export default function BalanceCheckerClient() {
                       <input
                         type="checkbox"
                         checked={selectedTokens.size === customTokens.length + 1}
-                        onChange={() => {}}
+                        onChange={toggleAllTokens}
+                        onClick={(e) => e.stopPropagation()}
                         className="w-4 h-4 rounded cursor-pointer"
                       />
-                      <label className="flex-1 cursor-pointer font-semibold text-sm text-gray-900">
+                      <label className="flex-1 cursor-pointer font-semibold text-sm text-gray-900" onClick={toggleAllTokens}>
                         {selectedTokens.size === customTokens.length + 1 ? '取消全选' : '全选'}
                       </label>
                     </div>
@@ -382,9 +473,60 @@ export default function BalanceCheckerClient() {
               {balances.length > 0 && (
                 <div className="space-y-4">
                   <div className="p-4 bg-gray-50 border border-gray-300 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">查询的地址</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-gray-600">查询的地址</p>
+                      {currentRecordLabel && (
+                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                          标签: {currentRecordLabel}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm font-mono text-gray-900 break-all">{queriedAddress}</p>
                   </div>
+
+                  {/* 保存记录和清空记录按钮 */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowSaveDialog(true)}
+                      className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
+                    >
+                      保存记录
+                    </button>
+                    <button
+                      onClick={handleClearRecords}
+                      className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
+                    >
+                      清空记录
+                    </button>
+                    {savedRecords.length > 0 && (
+                      <button
+                        onClick={() => setShowHistoryDialog(true)}
+                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                      >
+                        查看历史记录
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 显示匹配的历史记录标签 */}
+                  {matchedRecords.length > 0 && (
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm font-semibold text-yellow-900 mb-2">
+                        找到 {matchedRecords.length} 条历史记录：
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {matchedRecords.map((record) => (
+                          <span
+                            key={record.id}
+                            className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold"
+                            title={`保存时间: ${new Date(record.timestamp).toLocaleString('zh-CN')}`}
+                          >
+                            {record.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -432,6 +574,141 @@ export default function BalanceCheckerClient() {
           </div>
         </div>
       </div>
+
+      {/* 保存记录对话框 */}
+      {showSaveDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">保存查询记录</h2>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                标签名称（支持中文）
+              </label>
+              <input
+                type="text"
+                value={saveLabel}
+                onChange={(e) => setSaveLabel(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveRecord();
+                  }
+                }}
+                placeholder="例如：测试前余额、转账后余额等"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveRecord}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+              >
+                保存
+              </button>
+              <button
+                onClick={() => {
+                  setShowSaveDialog(false);
+                  setSaveLabel('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-900 font-semibold rounded-lg transition-colors"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 历史记录对话框 */}
+      {showHistoryDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">历史记录</h2>
+            <div className="flex-1 overflow-y-auto">
+              {savedRecords.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  暂无保存的记录
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {savedRecords
+                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                    .map((record) => (
+                      <div
+                        key={record.id}
+                        className="p-4 border border-gray-300 text-xs text-gray-600 rounded-lg hover:bg-gray-50"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+                              {record.label}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(record.timestamp).toLocaleString('zh-CN')}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (window.confirm('确定要删除这条记录吗？')) {
+                                const updated = savedRecords.filter((r) => r.id !== record.id);
+                                setSavedRecords(updated);
+                                localStorage.setItem('balance-checker-records', JSON.stringify(updated));
+                                if (updated.length === 0) {
+                                  setShowHistoryDialog(false);
+                                }
+                              }
+                            }}
+                            className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                          >
+                            删除
+                          </button>
+                        </div>
+                        <div className="text-xs text-gray-600 mb-2">
+                          <span className="font-semibold">地址:</span>{' '}
+                          <span className="font-mono">{record.address}</span>
+                          {' | '}
+                          <span className="font-semibold">网络:</span> {record.network}
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-2 py-1 text-left">代币</th>
+                                <th className="px-2 py-1 text-right">余额</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {record.balances.map((balance: TokenBalance) => (
+                                <tr key={balance.symbol}>
+                                  <td className="px-2 py-1">
+                                    <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+                                      {balance.symbol}
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-1 text-right font-mono font-semibold">
+                                    {balance.formatted}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setShowHistoryDialog(false)}
+                className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-900 font-semibold rounded-lg transition-colors"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
