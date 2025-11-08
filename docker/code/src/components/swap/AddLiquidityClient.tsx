@@ -26,6 +26,7 @@ const AddLiquidityClient: React.FC = () => {
   const [amountAMin, setAmountAMin] = useState('');
   const [amountBMin, setAmountBMin] = useState('');
   const [slippage, setSlippage] = useState<'auto' | '0.5' | '5' | '10'>('auto');
+  const [syncLocked, setSyncLocked] = useState(true);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -70,12 +71,12 @@ const AddLiquidityClient: React.FC = () => {
     fetchPair();
   }, [tokenA, tokenB, selectedNetwork]);
 
-  // 单边输入时，依据当前储备比例自动计算另一边数量（按各自 decimals 处理）
-  useEffect(() => {
-    if (!pairInfo?.reserve0 || !pairInfo?.reserve1 || !tokenA || !tokenB) return;
+  // 失焦时联动：依据当前储备比例在 onBlur 计算另一侧数量（按各自 decimals 处理）
+  const calcOtherOnBlur = (inputStr: string, isA: boolean): string | null => {
+    if (!pairInfo?.reserve0 || !pairInfo?.reserve1 || !tokenA || !tokenB) return null;
     const r0 = BigInt(pairInfo.reserve0);
     const r1 = BigInt(pairInfo.reserve1);
-    if (r0 === 0n || r1 === 0n) return;
+    if (r0 === 0n || r1 === 0n) return null;
 
     const aIsToken0 = pairInfo.token0 && tokenA && pairInfo.token0.toLowerCase() === tokenA.toLowerCase();
     const reserveA = aIsToken0 ? r0 : r1;
@@ -84,29 +85,30 @@ const AddLiquidityClient: React.FC = () => {
     const tokenADecimals = tokens.find((t) => t.address.toLowerCase() === tokenA.toLowerCase())?.decimals ?? 18;
     const tokenBDecimals = tokens.find((t) => t.address.toLowerCase() === tokenB.toLowerCase())?.decimals ?? 18;
 
-    const calcOther = (inputStr: string, isA: boolean): string | null => {
-      if (!inputStr || Number(inputStr) <= 0) return null;
-      try {
-        const inputRaw = parseUnits(inputStr, isA ? tokenADecimals : tokenBDecimals);
-        const outRaw = isA
-          ? (inputRaw * reserveB) / reserveA
-          : (inputRaw * reserveA) / reserveB;
-        const outHuman = formatUnits(outRaw, isA ? tokenBDecimals : tokenADecimals);
-        return outHuman;
-      } catch {
-        return null;
-      }
-    };
-
-    // 若 A 有值且 B 为空，则计算 B；反之亦然
-    if (amountADesired && !amountBDesired) {
-      const other = calcOther(amountADesired, true);
-      if (other) setAmountBDesired(other);
-    } else if (amountBDesired && !amountADesired) {
-      const other = calcOther(amountBDesired, false);
-      if (other) setAmountADesired(other);
+    if (!inputStr || Number(inputStr) <= 0) return null;
+    try {
+      const inputRaw = parseUnits(inputStr, isA ? tokenADecimals : tokenBDecimals);
+      const outRaw = isA
+        ? (inputRaw * reserveB) / reserveA
+        : (inputRaw * reserveA) / reserveB;
+      const outHuman = formatUnits(outRaw, isA ? tokenBDecimals : tokenADecimals);
+      return outHuman;
+    } catch {
+      return null;
     }
-  }, [amountADesired, amountBDesired, tokenA, tokenB, pairInfo, tokens]);
+  };
+
+  const handleBlurA = () => {
+    if (!syncLocked || !amountADesired) return;
+    const other = calcOtherOnBlur(amountADesired, true);
+    if (other) setAmountBDesired(other);
+  };
+
+  const handleBlurB = () => {
+    if (!syncLocked || !amountBDesired) return;
+    const other = calcOtherOnBlur(amountBDesired, false);
+    if (other) setAmountADesired(other);
+  };
 
   const handleSubmit = async () => {
     if (!fromAddress || !tokenA || !tokenB || !amountADesired || !amountBDesired) {
@@ -193,6 +195,16 @@ const AddLiquidityClient: React.FC = () => {
               {/* Token 选择与数量 */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">代币与数量</h2>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-gray-900">同步锁定</span>
+                  <button
+                    onClick={() => setSyncLocked((v) => !v)}
+                    className={`px-3 py-1 rounded ${syncLocked ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                  >
+                    {syncLocked ? '已开启' : '已关闭'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">开启后，输入框失焦将按当前储备比例同步另一侧数量。</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">Token A *</label>
@@ -214,11 +226,11 @@ const AddLiquidityClient: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">Token A 数量 *</label>
-                    <input type="number" value={amountADesired} onChange={(e) => setAmountADesired(e.target.value)} step="0.0001" min="0" placeholder="输入数量（单边输入自动计算另一侧）" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                    <input type="number" value={amountADesired} onChange={(e) => setAmountADesired(e.target.value)} onBlur={handleBlurA} step="0.0001" min="0" placeholder="输入数量（失焦后自动同步另一侧）" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-900 mb-2">Token B 数量 *</label>
-                    <input type="number" value={amountBDesired} onChange={(e) => setAmountBDesired(e.target.value)} step="0.0001" min="0" placeholder="输入数量（单边输入自动计算另一侧）" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
+                    <input type="number" value={amountBDesired} onChange={(e) => setAmountBDesired(e.target.value)} onBlur={handleBlurB} step="0.0001" min="0" placeholder="输入数量（失焦后自动同步另一侧）" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900" />
                   </div>
                 </div>
                 {pairInfo?.pairAddress && (
