@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { normalizeAddress } from '@/lib/utils';
 import mysql from 'mysql2/promise';
 
 const pool = mysql.createPool({
@@ -60,12 +61,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 规范化地址（EIP-55 校验和），并进行格式校验
+    let normalizedAddress: string;
+    try {
+      normalizedAddress = normalizeAddress(address);
+    } catch (e) {
+      return NextResponse.json(
+        { success: false, error: `无效的代币地址: ${address}` },
+        { status: 400 }
+      );
+    }
+
     const connection = await pool.getConnection();
 
     // 检查是否已存在活跃的代币
     const [existing] = await connection.query(
-      'SELECT id FROM custom_tokens WHERE contract_address = ? AND is_active = true',
-      [address]
+      'SELECT id FROM custom_tokens WHERE LOWER(contract_address) = LOWER(?) AND is_active = true',
+      [normalizedAddress]
     );
 
     if (Array.isArray(existing) && existing.length > 0) {
@@ -78,21 +90,22 @@ export async function POST(request: NextRequest) {
 
     // 检查是否存在已删除的同地址代币，如果存在则更新，否则插入新代币
     const [deletedRecord] = await connection.query(
-      'SELECT id FROM custom_tokens WHERE contract_address = ? AND is_active = false',
-      [address]
+      'SELECT id FROM custom_tokens WHERE LOWER(contract_address) = LOWER(?) AND is_active = false',
+      [normalizedAddress]
     );
 
     if (Array.isArray(deletedRecord) && deletedRecord.length > 0) {
-      // 更新已删除的记录
+      // 更新已删除的记录（使用主键ID，避免大小写不一致导致匹配失败）
+      const id = (deletedRecord as any)[0]?.id;
       await connection.query(
-        'UPDATE custom_tokens SET symbol = ?, decimals = ?, is_active = true, updated_at = CURRENT_TIMESTAMP WHERE contract_address = ?',
-        [symbol, decimalsNum, address]
+        'UPDATE custom_tokens SET symbol = ?, contract_address = ?, decimals = ?, is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [symbol.toUpperCase(), normalizedAddress, decimalsNum, id]
       );
     } else {
       // 插入新代币
       await connection.query(
         'INSERT INTO custom_tokens (symbol, contract_address, decimals, network) VALUES (?, ?, ?, ?)',
-        [symbol, address, decimalsNum, 'all']
+        [symbol.toUpperCase(), normalizedAddress, decimalsNum, 'all']
       );
     }
 
@@ -101,8 +114,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        symbol,
-        address,
+        symbol: symbol.toUpperCase(),
+        address: normalizedAddress,
         decimals: decimalsNum,
       },
     });

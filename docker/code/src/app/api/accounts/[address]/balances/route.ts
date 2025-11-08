@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, http, Hex } from 'viem';
-import { formatBalance } from '@/lib/utils';
+import { createPublicClient, http } from 'viem';
+import type { Address, Hex } from 'viem';
+import { formatBalance, normalizeAddress } from '@/lib/utils';
 
 /**
  * GET /api/accounts/[address]/balances
@@ -15,8 +16,16 @@ export async function GET(
 ) {
   try {
     const { address } = await params;
-
     if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return NextResponse.json(
+        { success: false, error: '无效的以太坊地址' },
+        { status: 400 }
+      );
+    }
+    let checksumAddress: Address;
+    try {
+      checksumAddress = normalizeAddress(address);
+    } catch (e) {
       return NextResponse.json(
         { success: false, error: '无效的以太坊地址' },
         { status: 400 }
@@ -41,7 +50,7 @@ export async function GET(
     if (requestedTokens.includes('BNB')) {
       try {
         const bnbBalance = await publicClient.getBalance({
-          address: address as Hex,
+          address: checksumAddress,
         });
 
         const bnbFormatted = formatBalance(bnbBalance, 18);
@@ -59,26 +68,42 @@ export async function GET(
     }
 
     // 2. 获取ERC20代币余额（仅在请求中包含时才查询）
-    const erc20Tokens = [
-      {
-        symbol: 'USDT',
-        name: 'Tether USD',
-        address: '0x55d398326f99059fF775485246999027B3197955',
-        decimals: 18,
-      },
-      {
-        symbol: 'USDC',
-        name: 'USD Coin',
-        address: '0x8AC76a51cc950d9822D68b83FE1Ad97B32Cd580d',
-        decimals: 18,
-      },
-      {
-        symbol: 'BUSD',
-        name: 'Binance USD',
-        address: '0xe9e7cea3dedca5984780bafc599bd69add087d56',
-        decimals: 18,
-      },
-    ];
+    // 从数据库中读取自定义代币，统一与 /api/custom-tokens 行为
+    let erc20Tokens: { symbol: string; name: string; address: string; decimals: number }[] = [];
+    try {
+      const resp = await fetch('http://localhost:8888/api/custom-tokens');
+      const json = await resp.json();
+      if (json?.success && Array.isArray(json.data)) {
+        erc20Tokens = json.data.map((t: any) => ({
+          symbol: String(t.symbol).toUpperCase(),
+          name: String(t.symbol).toUpperCase(),
+          address: String(t.address),
+          decimals: parseInt(String(t.decimals)) || 18,
+        }));
+      }
+    } catch (e) {
+      console.warn('读取自定义代币失败，退回硬编码：', e);
+      erc20Tokens = [
+        {
+          symbol: 'USDT',
+          name: 'USDT',
+          address: '0x55d398326f99059fF775485246999027B3197955',
+          decimals: 18,
+        },
+        {
+          symbol: 'USDC',
+          name: 'USDC',
+          address: '0x8AC76a51cc950d9822D68b83FE1Ad97B32Cd580d',
+          decimals: 18,
+        },
+        {
+          symbol: 'BUSD',
+          name: 'BUSD',
+          address: '0xe9e7cea3dedca5984780bafc599bd69add087d56',
+          decimals: 18,
+        },
+      ];
+    }
 
     // 只查询请求中包含的 ERC20 代币
     for (const token of erc20Tokens) {
@@ -89,8 +114,14 @@ export async function GET(
       try {
         // 调用balanceOf函数获取ERC20余额
         // balanceOf(address) 返回 uint256
+        let tokenAddr: Address;
+        try {
+          tokenAddr = normalizeAddress(token.address);
+        } catch (e) {
+          continue;
+        }
         const balance = await publicClient.readContract({
-          address: token.address as Hex,
+          address: tokenAddr,
           abi: [
             {
               name: 'balanceOf',
@@ -101,7 +132,7 @@ export async function GET(
             },
           ],
           functionName: 'balanceOf',
-          args: [address as Hex],
+          args: [checksumAddress],
         });
 
         const tokenBalance = balance as bigint;
@@ -113,7 +144,7 @@ export async function GET(
           balance: tokenBalance.toString(),
           formatted,
           decimals: token.decimals,
-          contractAddress: token.address,
+          contractAddress: tokenAddr,
         });
       } catch (err) {
         // 如果查询失败（可能是没有部署），跳过

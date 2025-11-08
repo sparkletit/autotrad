@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, encodeFunctionData } from 'viem';
+import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, encodeFunctionData, getAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { bsc } from 'viem/chains';
-import { Hex } from 'viem';
+import { Hex, Address } from 'viem';
 import { getPrivateKeyFromDatabase, parseBlockchainError } from '@/lib/serverUtils';
+import { ZERO_ADDRESS, normalizeAddress, tryNormalizeAddress, safeReadDecimals } from '@/lib/utils';
 
 const getRpcUrl = (network: string): string => {
   const rpcUrls: Record<string, string> = {
@@ -58,6 +59,9 @@ const ERC20_ABI = [
   },
 ] as const;
 
+// 空 bytes 常量，用于 swap 的 data 参数
+const EMPTY_BYTES: Hex = '0x';
+
 /**
  * 计算 amountOut（基于 x * y = k 公式）
  */
@@ -76,9 +80,9 @@ function getAmountOut(amountIn: bigint, reserveIn: bigint, reserveOut: bigint): 
  * 在链上真实执行 Swap 交易
  */
 export async function POST(request: NextRequest) {
-  let debugCtx: Record<string, any> | undefined;
-  let txHash: string | undefined; // 用于跟踪swap交易hash，即使失败也要返回
-  let transferHash: string | undefined; // 用于跟踪transfer交易hash，即使失败也要返回
+  let debugCtx: Record<string, any> = {};
+  let txHash: Hex | undefined; // 用于跟踪swap交易hash，即使失败也要返回
+  let transferHash: Hex | undefined; // 用于跟踪transfer交易hash，即使失败也要返回
   try {
     const body = await request.json();
     const {
@@ -93,12 +97,57 @@ export async function POST(request: NextRequest) {
       network = 'fork',
     } = body;
     
+    // 规范化与校验地址（使用 EIP-55 校验和）
+    let accountAddr: Address;
+    let toAddr: Address;
+    let pairAddr: Address;
+    let tokenInAddr: Address;
+    let tokenOutAddr: Address;
+
+    try {
+      accountAddr = normalizeAddress(account);
+    } catch (e: any) {
+      return NextResponse.json(
+        { success: false, error: `账户地址无效: ${account}` },
+        { status: 400 }
+      );
+    }
+    try {
+      pairAddr = normalizeAddress(pairAddress);
+    } catch (e: any) {
+      return NextResponse.json(
+        { success: false, error: `Pair 地址无效: ${pairAddress}` },
+        { status: 400 }
+      );
+    }
+    try {
+      tokenInAddr = tokenIn === '0x0000000000000000000000000000000000000000' ? ZERO_ADDRESS : normalizeAddress(tokenIn);
+    } catch (e: any) {
+      return NextResponse.json(
+        { success: false, error: `输入代币地址无效: ${tokenIn}` },
+        { status: 400 }
+      );
+    }
+    try {
+      tokenOutAddr = tokenOut === '0x0000000000000000000000000000000000000000' ? ZERO_ADDRESS : normalizeAddress(tokenOut);
+    } catch (e: any) {
+      return NextResponse.json(
+        { success: false, error: `输出代币地址无效: ${tokenOut}` },
+        { status: 400 }
+      );
+    }
     // 如果没有提供toAddress，则使用account作为默认值
-    const swapToAddress = toAddress || account;
+    try {
+      toAddr = toAddress ? normalizeAddress(toAddress) : accountAddr;
+    } catch (e: any) {
+      toAddr = accountAddr;
+    }
+
+    // 使用 EIP-55 校验和地址进行合约交互，避免严格校验失败
 
     // 累积调试上下文（仅用于返回/日志，避免泄露敏感信息）
     debugCtx = {
-      input: { account, pairAddress, tokenIn, tokenOut, amountIn, slippage, network },
+      input: { account: accountAddr, pairAddress: pairAddr, tokenIn: tokenInAddr, tokenOut: tokenOutAddr, amountIn, slippage, network },
     };
 
     if (!account || !pairAddress || !tokenIn || !tokenOut || !amountIn) {
@@ -109,8 +158,8 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('========== Swap 交易开始 ==========');
-    console.log('账户:', account);
-    console.log('接收地址 (To):', swapToAddress);
+    console.log('账户:', accountAddr);
+    console.log('接收地址 (To):', toAddr);
     
     // 1. 从数据库获取私钥
     const privateKey = await getPrivateKeyFromDatabase(account);
@@ -145,26 +194,26 @@ export async function POST(request: NextRequest) {
     });
     
     console.log('✅ 成功创建 wallet client');
-    console.log('Pair 地址:', pairAddress);
-    console.log('输入代币:', tokenIn);
-    console.log('输出代币:', tokenOut);
+    console.log('Pair 地址:', pairAddr);
+    console.log('输入代币:', tokenInAddr);
+    console.log('输出代币:', tokenOutAddr);
     console.log('输入数量:', amountIn);
 
     // 获取 Pair 信息
     const token0 = await publicClient.readContract({
-      address: pairAddress as Hex,
+      address: pairAddr,
       abi: PAIR_ABI,
       functionName: 'token0',
-    }) as string;
+    }) as Address;
 
     const token1 = await publicClient.readContract({
-      address: pairAddress as Hex,
+      address: pairAddr,
       abi: PAIR_ABI,
       functionName: 'token1',
-    }) as string;
+    }) as Address;
 
     const reserves = await publicClient.readContract({
-      address: pairAddress as Hex,
+      address: pairAddr,
       abi: PAIR_ABI,
       functionName: 'getReserves',
     });
@@ -178,29 +227,29 @@ export async function POST(request: NextRequest) {
     debugCtx.reserves = { reserve0: reserve0.toString(), reserve1: reserve1.toString() };
 
     // 确定输入输出顺序
-    const isToken0In = tokenIn.toLowerCase() === token0.toLowerCase();
+    const isToken0In = tokenInAddr.toLowerCase() === token0.toLowerCase();
     const reserveIn = isToken0In ? reserve0 : reserve1;
     const reserveOut = isToken0In ? reserve1 : reserve0;
     debugCtx.path = { isToken0In };
 
     // 账户余额与基础信息调试
     try {
-      const nativeBalance = await publicClient.getBalance({ address: account as Hex });
+      const nativeBalance = await publicClient.getBalance({ address: accountAddr });
       console.log('账户原生币余额(Wei):', nativeBalance.toString());
       debugCtx.balances = { native: nativeBalance.toString() };
     } catch (e) {
       console.warn('⚠️ 获取账户原生币余额失败:', e);
     }
     try {
-      if (tokenIn !== '0x0000000000000000000000000000000000000000') {
+      if (tokenInAddr !== ZERO_ADDRESS) {
         const erc20Balance = await publicClient.readContract({
-          address: tokenIn as Hex,
+          address: tokenInAddr,
           abi: [
             { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
             { name: 'symbol', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'string' }] },
           ] as const,
           functionName: 'balanceOf',
-          args: [account as Hex],
+          args: [accountAddr],
         }) as bigint;
         console.log('账户代币余额(Wei):', erc20Balance.toString());
         debugCtx.balances = { ...(debugCtx.balances || {}), erc20In: erc20Balance.toString() };
@@ -209,25 +258,11 @@ export async function POST(request: NextRequest) {
       console.warn('⚠️ 获取账户代币余额失败:', e);
     }
 
-    // 获取代币精度
-    let decimalsIn = 18;
-    if (tokenIn !== '0x0000000000000000000000000000000000000000') {
-      decimalsIn = await publicClient.readContract({
-        address: tokenIn as Hex,
-        abi: ERC20_ABI,
-        functionName: 'decimals',
-      }) as number;
-    }
+    // 获取代币精度（带重试与回退逻辑，规避不同链校验和差异）
+    const decimalsIn = tokenInAddr === ZERO_ADDRESS ? 18 : await safeReadDecimals(publicClient, tokenInAddr);
 
-    let decimalsOut = 18;
-    if (tokenOut !== '0x0000000000000000000000000000000000000000') {
-      decimalsOut = await publicClient.readContract({
-        address: tokenOut as Hex,
-        abi: ERC20_ABI,
-        functionName: 'decimals',
-      }) as number;
-    }
-    debugCtx.decimals = { in: decimalsIn, out: decimalsOut };
+    const decimalsOut = tokenOutAddr === ZERO_ADDRESS ? 18 : await safeReadDecimals(publicClient, tokenOutAddr);
+    debugCtx = { ...(debugCtx || {}), decimals: { in: decimalsIn, out: decimalsOut } };
 
     // 转换输入数量
     const amountInWei = parseUnits(amountIn, decimalsIn);
@@ -263,19 +298,19 @@ export async function POST(request: NextRequest) {
     }
 
     // 如果是 ERC20，先转账到 Pair
-    if (tokenIn !== '0x0000000000000000000000000000000000000000') {
+    if (tokenInAddr !== ZERO_ADDRESS) {
       console.log('转账代币到 Pair...');
       // 预估/模拟 transfer 调用，便于提前捕获 revert 原因
       try {
         const gasForTransfer = await publicClient.estimateGas({
           account: accountSigner,
-          to: tokenIn as Hex,
+          to: tokenInAddr,
           data: encodeFunctionData({
             abi: [
               { name: 'transfer', type: 'function', stateMutability: 'nonpayable', inputs: [ { name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' } ], outputs: [ { name: '', type: 'bool' } ] },
             ] as const,
             functionName: 'transfer',
-            args: [pairAddress as Hex, amountInWei],
+            args: [pairAddr, amountInWei],
           }),
         });
         console.log('transfer 估算 Gas:', gasForTransfer.toString());
@@ -300,10 +335,10 @@ export async function POST(request: NextRequest) {
       
       // 使用 viem 的 writeContract（自动签名）
       transferHash = await walletClient.writeContract({
-        address: tokenIn as Hex,
+        address: tokenInAddr,
         abi: ERC20_TRANSFER_ABI,
         functionName: 'transfer',
-        args: [pairAddress as Hex, amountInWei],
+        args: [pairAddr, amountInWei],
       });
       
       console.log('✅ 转账交易已发送:', transferHash);
@@ -312,7 +347,7 @@ export async function POST(request: NextRequest) {
       
       // ⚠️ 重要：必须等待转账确认后再执行 swap，否则 Pair 合约还没有收到代币
       console.log('⏳ 等待代币转账确认...');
-      const transferReceipt = await publicClient.waitForTransactionReceipt({ hash: transferHash });
+      const transferReceipt = await publicClient.waitForTransactionReceipt({ hash: transferHash! });
       
       if (transferReceipt.status !== 'success') {
         console.error('❌ 代币转账失败（已被 revert）:', transferHash);
@@ -327,10 +362,10 @@ export async function POST(request: NextRequest) {
           { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
         ] as const;
         const pairBalance = await publicClient.readContract({
-          address: tokenIn as Hex,
+          address: tokenInAddr,
           abi: ERC20_BALANCE_ABI,
           functionName: 'balanceOf',
-          args: [pairAddress as Hex],
+          args: [pairAddr],
         }) as bigint;
         console.log('Pair 合约代币余额:', pairBalance.toString());
         debugCtx.pairTokenBalance = pairBalance.toString();
@@ -346,8 +381,8 @@ export async function POST(request: NextRequest) {
     // 调用 Pair 的 swap() 方法
     // 注意：swap() 需要的是实际输出数量，不是最小输出
     // 但是 Uniswap V2 会在内部检查 K 值，所以我们使用计算的输出数量
-    const amount0Out = isToken0In ? '0' : amountOutWei.toString();
-    const amount1Out = isToken0In ? amountOutWei.toString() : '0';
+    const amount0Out = isToken0In ? BigInt(0) : amountOutWei;
+    const amount1Out = isToken0In ? amountOutWei : BigInt(0);
 
     console.log('执行 Swap:');
     console.log('- amount0Out:', amount0Out);
@@ -376,13 +411,13 @@ export async function POST(request: NextRequest) {
     try {
       const estimatedGas = await publicClient.estimateGas({
         account: accountSigner,
-        to: pairAddress as Hex,
+        to: pairAddr,
         data: encodeFunctionData({
           abi: [
             { name: 'swap', type: 'function', stateMutability: 'nonpayable', inputs: [ { name: 'amount0Out', type: 'uint256' }, { name: 'amount1Out', type: 'uint256' }, { name: 'to', type: 'address' }, { name: 'data', type: 'bytes' } ], outputs: [] },
           ] as const,
           functionName: 'swap',
-          args: [ BigInt(amount0Out), BigInt(amount1Out), swapToAddress as Hex, '0x' as Hex ],
+          args: [ amount0Out, amount1Out, toAddr, EMPTY_BYTES ],
         }),
       });
       console.log('swap 估算 Gas:', estimatedGas.toString());
@@ -394,15 +429,10 @@ export async function POST(request: NextRequest) {
     
     // 使用 viem 的 writeContract（自动签名）
     txHash = await walletClient.writeContract({
-      address: pairAddress as Hex,
+      address: pairAddr,
       abi: SWAP_ABI,
       functionName: 'swap',
-      args: [
-        BigInt(amount0Out),
-        BigInt(amount1Out),
-        swapToAddress as Hex,
-        '0x' as Hex, // empty bytes
-      ],
+      args: [ amount0Out, amount1Out, toAddr, EMPTY_BYTES ],
     });
 
     console.log('✅ Swap 交易已发送, 哈希:', txHash);
@@ -413,7 +443,7 @@ export async function POST(request: NextRequest) {
     // cast receipt <hash> --rpc-url http://anvil-api:8545
     
     // 异步后台等待交易确认（不阻塞响应）
-    publicClient.waitForTransactionReceipt({ hash: txHash }).then((receipt) => {
+    publicClient.waitForTransactionReceipt({ hash: txHash! }).then((receipt) => {
       console.log('✅ Swap 交易已确认, 哈希:', txHash);
       console.log('交易确认 status:', receipt.status);
       console.log('Gas 使用:', receipt.gasUsed.toString());

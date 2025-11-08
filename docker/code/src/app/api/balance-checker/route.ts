@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, http, Hex } from 'viem';
-import { formatBalance } from '@/lib/utils';
+import { createPublicClient, http } from 'viem';
+import type { Address } from 'viem';
+import { formatBalance, normalizeAddress } from '@/lib/utils';
 
 /**
  * GET /api/balance-checker?address=0x...&network=fork&tokens=[{address,symbol}]
@@ -14,6 +15,15 @@ export async function GET(request: NextRequest) {
     const tokensParam = searchParams.get('tokens');
 
     if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
+      return NextResponse.json(
+        { success: false, error: '无效的以太坊地址' },
+        { status: 400 }
+      );
+    }
+    let checksumAddress: Address;
+    try {
+      checksumAddress = normalizeAddress(address);
+    } catch (e) {
       return NextResponse.json(
         { success: false, error: '无效的以太坊地址' },
         { status: 400 }
@@ -44,7 +54,7 @@ export async function GET(request: NextRequest) {
     // 1. 获取原生代币（BNB）余额
     try {
       const nativeBalance = await publicClient.getBalance({
-        address: address as Hex,
+        address: checksumAddress,
       });
 
       const nativeFormatted = formatBalance(nativeBalance, 18);
@@ -74,18 +84,24 @@ export async function GET(request: NextRequest) {
     // 去重处理
     const uniqueTokens = Array.from(
       new Map(
-        customTokenList.map((t) => [t.address.toLowerCase(), t])
+        customTokenList.map((t) => [String(t.address).toLowerCase(), t])
       ).values()
     );
 
     for (const token of uniqueTokens) {
       try {
-        if (!token.address.match(/^0x[a-fA-F0-9]{40}$/)) {
+        if (!token.address || !String(token.address).match(/^0x[a-fA-F0-9]{40}$/)) {
+          continue;
+        }
+        let tokenAddr: Address;
+        try {
+          tokenAddr = normalizeAddress(String(token.address));
+        } catch (e) {
           continue;
         }
 
         const balance = await publicClient.readContract({
-          address: token.address as Hex,
+          address: tokenAddr,
           abi: [
             {
               name: 'balanceOf',
@@ -96,7 +112,7 @@ export async function GET(request: NextRequest) {
             },
           ],
           functionName: 'balanceOf',
-          args: [address as Hex],
+          args: [checksumAddress],
         });
 
         const tokenBalance = balance as bigint;
@@ -109,7 +125,7 @@ export async function GET(request: NextRequest) {
           balance: tokenBalance.toString(),
           formatted,
           decimals,
-          contractAddress: token.address,
+          contractAddress: tokenAddr,
         });
       } catch (err) {
         // 记录详细的错误信息
@@ -134,7 +150,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        address,
+        address: checksumAddress,
         network,
         balances,
       },

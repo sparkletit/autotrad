@@ -1,6 +1,62 @@
 /**
- * 通用工具函数库
+ * 通用地址工具：校验与规范化
  */
+import { getAddress } from 'viem';
+import type { Address } from 'viem';
+
+/**
+ * 校验并返回 EIP-55 校验和地址。
+ * 抛错：当输入不是有效地址时。
+ */
+export function normalizeAddress(input: string): Address {
+  return getAddress(input);
+}
+
+/**
+ * 尝试规范化地址，失败返回 undefined。
+ */
+export function tryNormalizeAddress(input?: string | null): Address | undefined {
+  if (!input) return undefined;
+  try {
+    return getAddress(input);
+  } catch {
+    return undefined;
+  }
+}
+
+
+/**
+ * 全零地址（校验和形式）。
+ */
+export const ZERO_ADDRESS: Address = getAddress('0x0000000000000000000000000000000000000000');
+
+/**
+ * 将地址转为小写字符串（不改变类型）。
+ */
+export function toLowerAddress(addr: Address): Address {
+  return (addr.toLowerCase() as Address);
+}
+
+/**
+ * 读取 ERC20 的 decimals，支持校验和失败回退：
+ * 1) 用校验和地址读；失败则 2) 用小写地址读；仍失败则返回 18。
+ */
+export async function safeReadDecimals(publicClient: any, token: Address): Promise<number> {
+  const ERC20_ABI = [
+    { constant: true, inputs: [], name: 'decimals', outputs: [{ name: '', type: 'uint8' }], type: 'function' },
+  ] as const;
+  try {
+    return await publicClient.readContract({ address: token, abi: ERC20_ABI, functionName: 'decimals' });
+  } catch (e1) {
+    try {
+      const lower = toLowerAddress(token);
+      return await publicClient.readContract({ address: lower, abi: ERC20_ABI, functionName: 'decimals' });
+    } catch (e2) {
+      return 18;
+    }
+  }
+}
+// 通用工具函数库
 
 /**
  * 验证以太坊地址格式

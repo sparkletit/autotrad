@@ -95,7 +95,8 @@ const TradePageClient: React.FC = () => {
       const loadBalances = async () => {
         setBalancesLoading(true);
         try {
-          const balances = await fetchTokenBalances(fromAddress);
+          const tokensForQuery = (customTokens && customTokens.length > 0) ? customTokens : undefined;
+          const balances = await fetchTokenBalances(fromAddress, tokensForQuery, selectedNetwork);
           setTokenBalances(balances);
           setSelectedToken('BNB');
         } catch (err) {
@@ -122,7 +123,7 @@ const TradePageClient: React.FC = () => {
       };
       loadBalances();
     }
-  }, [fromAddress]);
+  }, [fromAddress, customTokens, selectedNetwork]);
 
   // 关闭代币下拉框的外部点击处理
   useEffect(() => {
@@ -290,8 +291,8 @@ const TradePageClient: React.FC = () => {
         checkTransactionStatus(data.txHash);
         
         // 异步刷新余额（不阻塞 UI）
-        fetchTokenBalances(fromAddress)
-          .then(balances => {
+        fetchTokenBalances(fromAddress, (customTokens && customTokens.length > 0) ? customTokens : undefined, selectedNetwork)
+          .then((balances: TokenBalance[]) => {
             setTokenBalances(balances);
           })
           .catch(err => {
@@ -304,13 +305,15 @@ const TradePageClient: React.FC = () => {
         
         // 转账失败时也刷新余额，确保状态同步
         // 只刷新选中代币的余额，避免清空其他代币的余额信息
-        fetchTokenBalances(fromAddress, selectedToken === 'BNB' ? ['BNB'] : [selectedToken])
-          .then(newBalances => {
+        const tokenObjFail = customTokens.find((t) => t.symbol === selectedToken);
+        const queryTokensFail = selectedToken === 'BNB' ? undefined : (tokenObjFail ? [tokenObjFail] : []);
+        fetchTokenBalances(fromAddress, queryTokensFail, selectedNetwork)
+          .then((newBalances: TokenBalance[]) => {
             // 合并新旧余额，保留已存在的代币余额
             setTokenBalances(prevBalances => {
-              const balanceMap = new Map(prevBalances.map(b => [b.symbol, b]));
+              const balanceMap = new Map(prevBalances.map((b: TokenBalance) => [b.symbol, b]));
               // 更新或添加新余额
-              newBalances.forEach(b => {
+              newBalances.forEach((b: TokenBalance) => {
                 balanceMap.set(b.symbol, b);
               });
               return Array.from(balanceMap.values());
@@ -328,13 +331,15 @@ const TradePageClient: React.FC = () => {
       
         // 转账异常时也刷新余额
         // 只刷新选中代币的余额，避免清空其他代币的余额信息
-        fetchTokenBalances(fromAddress, selectedToken === 'BNB' ? ['BNB'] : [selectedToken])
-          .then(newBalances => {
+        const tokenObjErr = customTokens.find((t) => t.symbol === selectedToken);
+        const queryTokensErr = selectedToken === 'BNB' ? undefined : (tokenObjErr ? [tokenObjErr] : []);
+        fetchTokenBalances(fromAddress, queryTokensErr, selectedNetwork)
+          .then((newBalances: TokenBalance[]) => {
             // 合并新旧余额，保留已存在的代币余额
             setTokenBalances(prevBalances => {
-              const balanceMap = new Map(prevBalances.map(b => [b.symbol, b]));
+              const balanceMap = new Map(prevBalances.map((b: TokenBalance) => [b.symbol, b]));
               // 更新或添加新余额
-              newBalances.forEach(b => {
+              newBalances.forEach((b: TokenBalance) => {
                 balanceMap.set(b.symbol, b);
               });
               return Array.from(balanceMap.values());
@@ -362,8 +367,8 @@ const TradePageClient: React.FC = () => {
         if (data.status === 'confirmed') {
           setSuccess(`✅ 交易已确认！\n\n交易哈希: ${hash}`);
           // 交易确认后刷新余额
-          fetchTokenBalances(fromAddress)
-            .then(balances => {
+          fetchTokenBalances(fromAddress, (customTokens && customTokens.length > 0) ? customTokens : undefined, selectedNetwork)
+            .then((balances: TokenBalance[]) => {
               setTokenBalances(balances);
             })
             .catch(err => {

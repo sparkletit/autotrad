@@ -107,21 +107,33 @@ export const fetchCustomTokens = async (): Promise<CustomToken[]> => {
 };
 
 /**
- * 获取账户余额
+ * 获取账户余额（统一使用 /api/balance-checker）
  * @param address 账户地址
- * @param tokens 可选，要查询的代币符号列表，如 ['BNB', 'USDT']。如果不提供，只查询 BNB
+ * @param tokens 可选，要查询的代币对象列表，如 [{ address, symbol, decimals }]
+ * @param network 可选，网络标识，默认 'fork'
  */
-export const fetchTokenBalances = async (address: string, tokens?: string[]) => {
+export const fetchTokenBalances = async (
+  address: string,
+  tokens?: CustomToken[],
+  network: string = 'fork'
+) => {
   try {
-    // 构建查询参数
-    const tokensParam = tokens && tokens.length > 0 
-      ? tokens.join(',') 
-      : 'BNB'; // 默认只查询 BNB
-    
-    const response = await fetch(`/api/accounts/${address}/balances?tokens=${encodeURIComponent(tokensParam)}`);
+    const params = new URLSearchParams({ address, network });
+
+    if (tokens && tokens.length > 0) {
+      const payload = tokens.map((t) => ({
+        address: t.address,
+        symbol: t.symbol,
+        decimals: t.decimals,
+      }));
+      params.set('tokens', JSON.stringify(payload));
+    }
+
+    const response = await fetch(`/api/balance-checker?${params.toString()}`);
     const data = await response.json();
     if (data.success) {
-      return data.data || [];
+      // /api/balance-checker 返回 { data: { address, balances } }
+      return (data.data && Array.isArray(data.data.balances)) ? data.data.balances : [];
     }
     return [];
   } catch (err) {
