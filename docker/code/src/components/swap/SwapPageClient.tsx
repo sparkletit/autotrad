@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
+import DeFiNavigation from '@/components/swap/DeFiNavigation';
 import { fetchCustomTokens, fetchTokenBalances } from '@/lib/addressService';
 import { formatBalance } from '@/lib/utils';
 
@@ -338,9 +339,14 @@ const SwapPageClient: React.FC = () => {
         <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">代币交换</h1>
 
-          <div className="grid grid-cols-1 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* 左侧导航 */}
+            <div className="md:col-span-3">
+              <DeFiNavigation />
+            </div>
+
             {/* 主要功能 */}
-            <div className="space-y-6">
+            <div className="md:col-span-9 space-y-6">
               {/* 账户选择 */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">账户信息</h2>

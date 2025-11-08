@@ -77,10 +77,13 @@ function getAmountOut(amountIn: bigint, reserveIn: bigint, reserveOut: bigint): 
  */
 export async function POST(request: NextRequest) {
   let debugCtx: Record<string, any> | undefined;
+  let txHash: string | undefined; // 用于跟踪swap交易hash，即使失败也要返回
+  let transferHash: string | undefined; // 用于跟踪transfer交易hash，即使失败也要返回
   try {
     const body = await request.json();
     const {
       account,
+      toAddress,
       pairAddress,
       tokenIn,
       tokenOut,
@@ -89,6 +92,9 @@ export async function POST(request: NextRequest) {
       slippage = '0.5',
       network = 'fork',
     } = body;
+    
+    // 如果没有提供toAddress，则使用account作为默认值
+    const swapToAddress = toAddress || account;
 
     // 累积调试上下文（仅用于返回/日志，避免泄露敏感信息）
     debugCtx = {
@@ -104,6 +110,7 @@ export async function POST(request: NextRequest) {
 
     console.log('========== Swap 交易开始 ==========');
     console.log('账户:', account);
+    console.log('接收地址 (To):', swapToAddress);
     
     // 1. 从数据库获取私钥
     const privateKey = await getPrivateKeyFromDatabase(account);
@@ -292,7 +299,7 @@ export async function POST(request: NextRequest) {
       ] as const;
       
       // 使用 viem 的 writeContract（自动签名）
-      const transferHash = await walletClient.writeContract({
+      transferHash = await walletClient.writeContract({
         address: tokenIn as Hex,
         abi: ERC20_TRANSFER_ABI,
         functionName: 'transfer',
@@ -300,6 +307,8 @@ export async function POST(request: NextRequest) {
       });
       
       console.log('✅ 转账交易已发送:', transferHash);
+      // 记录transfer hash，以便在错误时返回
+      debugCtx.transferHash = transferHash;
       
       // ⚠️ 重要：必须等待转账确认后再执行 swap，否则 Pair 合约还没有收到代币
       console.log('⏳ 等待代币转账确认...');
@@ -373,7 +382,7 @@ export async function POST(request: NextRequest) {
             { name: 'swap', type: 'function', stateMutability: 'nonpayable', inputs: [ { name: 'amount0Out', type: 'uint256' }, { name: 'amount1Out', type: 'uint256' }, { name: 'to', type: 'address' }, { name: 'data', type: 'bytes' } ], outputs: [] },
           ] as const,
           functionName: 'swap',
-          args: [ BigInt(amount0Out), BigInt(amount1Out), account as Hex, '0x' as Hex ],
+          args: [ BigInt(amount0Out), BigInt(amount1Out), swapToAddress as Hex, '0x' as Hex ],
         }),
       });
       console.log('swap 估算 Gas:', estimatedGas.toString());
@@ -384,14 +393,14 @@ export async function POST(request: NextRequest) {
     }
     
     // 使用 viem 的 writeContract（自动签名）
-    const txHash = await walletClient.writeContract({
+    txHash = await walletClient.writeContract({
       address: pairAddress as Hex,
       abi: SWAP_ABI,
       functionName: 'swap',
       args: [
         BigInt(amount0Out),
         BigInt(amount1Out),
-        account as Hex,
+        swapToAddress as Hex,
         '0x' as Hex, // empty bytes
       ],
     });
@@ -440,6 +449,23 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('❌ Swap 执行失败:', error);
     
+    // 尝试从错误中提取交易hash（某些情况下错误可能包含hash）
+    // 优先使用swap的hash，如果没有则使用transfer的hash
+    let errorTxHash = txHash || transferHash;
+    if (!errorTxHash && error?.hash) {
+      errorTxHash = error.hash;
+    }
+    if (!errorTxHash && error?.transactionHash) {
+      errorTxHash = error.transactionHash;
+    }
+    
+    // 如果有transfer hash但没有swap hash，在错误信息中说明
+    if (transferHash && !txHash) {
+      debugCtx.failedAt = 'transfer';
+    } else if (txHash) {
+      debugCtx.failedAt = 'swap';
+    }
+    
     // 尝试提取详细的 revert 原因
     let detailedError = '';
     if (error?.reason) {
@@ -459,14 +485,21 @@ export async function POST(request: NextRequest) {
     console.error('解读后的错误:', friendlyErrorMessage);
     
     // 如果提取到了详细的 revert 原因，添加到错误信息中
-    const finalErrorMessage = detailedError 
+    let finalErrorMessage = detailedError 
       ? `${friendlyErrorMessage}\n\n详细原因: ${detailedError}`
       : friendlyErrorMessage;
+    
+    // 如果有交易hash，添加到错误信息中
+    if (errorTxHash) {
+      finalErrorMessage += `\n\n交易哈希: ${errorTxHash}`;
+      finalErrorMessage += `\n提示: 使用 cast tx ${errorTxHash} --rpc-url ${getRpcUrl(debugCtx?.input?.network || 'fork')} 查看交易详情`;
+    }
     
     return NextResponse.json(
       {
         success: false,
         error: finalErrorMessage,
+        data: errorTxHash ? { txHash: errorTxHash } : undefined,
         debug: {
           hint: '查看服务日志获取更详细的链上错误与上下文',
           context: debugCtx,

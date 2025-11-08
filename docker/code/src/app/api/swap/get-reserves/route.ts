@@ -42,6 +42,14 @@ const PAIR_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    constant: true,
+    inputs: [{ name: 'owner', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;
 
 /**
@@ -51,6 +59,7 @@ const PAIR_ABI = [
 export async function POST(request: NextRequest) {
   let pairAddress = '';
   let network = 'fork';
+  let account: string | undefined;
 
   try {
     const body = await request.json();
@@ -60,6 +69,10 @@ export async function POST(request: NextRequest) {
       pairAddress = '0x' + pairAddress;
     }
     network = body.network || 'fork';
+    account = body.account?.toLowerCase();
+    if (account && !account.startsWith('0x')) {
+      account = '0x' + account;
+    }
 
     // 参数验证
     if (!pairAddress) {
@@ -178,12 +191,34 @@ export async function POST(request: NextRequest) {
       number
     ];
 
+    // 如果提供了账户地址，查询LP余额
+    let lpBalance = '0';
+    if (account && account.match(/^0x[a-fA-F0-9]{40}$/)) {
+      try {
+        const balance = await publicClient.readContract({
+          address: pairAddress as Hex,
+          abi: PAIR_ABI,
+          functionName: 'balanceOf',
+          args: [account as Hex],
+        }) as bigint;
+        lpBalance = balance.toString();
+        console.log('- LP余额:', lpBalance);
+      } catch (balanceError) {
+        console.warn('查询LP余额失败:', balanceError);
+        // 如果查询失败，lpBalance保持为'0'
+      }
+    }
+
     console.log('储备查询成功:');
     console.log('- Token0:', token0);
     console.log('- Reserve0:', reserve0.toString());
     console.log('- Token1:', token1);
     console.log('- Reserve1:', reserve1.toString());
     console.log('- Block Timestamp:', blockTimestampLast);
+    if (account) {
+      console.log('- 账户:', account);
+      console.log('- LP余额:', lpBalance);
+    }
 
     return NextResponse.json(
       {
@@ -194,6 +229,7 @@ export async function POST(request: NextRequest) {
           blockTimestampLast,
           token0: token0 as string,
           token1: token1 as string,
+          lpBalance: lpBalance,
         },
       },
       {

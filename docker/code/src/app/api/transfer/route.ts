@@ -267,6 +267,7 @@ export async function POST(request: NextRequest) {
         // 使用 Promise.race 实现超时控制
         let hash: Hex;
         try {
+          console.log('⏳ 开始发送交易，超时设置为 2 分钟...');
           hash = await Promise.race([
             walletClient.sendTransaction({
               to: toAddress as Hex,
@@ -275,7 +276,7 @@ export async function POST(request: NextRequest) {
               nonce, // 手动指定 nonce，避免 viem 自动获取
             }),
             new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error('交易发送超时（1分钟）')), 60000)
+              setTimeout(() => reject(new Error('交易发送超时（2分钟）')), 120000)
             ),
           ]);
         } catch (err: any) {
@@ -498,6 +499,7 @@ export async function POST(request: NextRequest) {
         // 使用 Promise.race 实现超时控制
         let hash: Hex;
         try {
+          console.log('⏳ 开始发送 ERC20 交易，超时设置为 2 分钟...');
           hash = await Promise.race([
             walletClient.writeContract({
               address: tokenAddress as Hex,
@@ -508,7 +510,7 @@ export async function POST(request: NextRequest) {
               nonce, // 手动指定 nonce，避免 viem 自动获取
             }),
             new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error('交易发送超时（1分钟）')), 60000)
+              setTimeout(() => reject(new Error('交易发送超时（2分钟）')), 120000)
             ),
           ]);
         } catch (err: any) {
