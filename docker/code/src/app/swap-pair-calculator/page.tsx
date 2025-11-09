@@ -401,11 +401,9 @@ export default function SwapPairCalculatorPage() {
 
         {/* 当前储备与价格 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="bg-white rounded-lg shadow-md p-6 md:col-span-2">
             <div className="text-sm text-gray-600">{alias0} (t0) 当前储备</div>
-            <div className="text-lg font-mono">{format(reserve0, { decimals: token0Decimals, thousandSep: true })}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="text-lg font-mono mb-2">{format(reserve0, { decimals: token0Decimals, thousandSep: true })}</div>
             <div className="text-sm text-gray-600">{alias1} (t1) 当前储备</div>
             <div className="text-lg font-mono">{format(reserve1, { decimals: token1Decimals, thousandSep: true })}</div>
           </div>
