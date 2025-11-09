@@ -44,6 +44,14 @@ const PAIR_ABI = [
   },
   {
     constant: true,
+    inputs: [],
+    name: 'totalSupply',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    constant: true,
     inputs: [{ name: 'owner', type: 'address' }],
     name: 'balanceOf',
     outputs: [{ name: '', type: 'uint256' }],
@@ -191,6 +199,18 @@ export async function POST(request: NextRequest) {
       number
     ];
 
+    // totalSupply
+    let totalSupply: bigint = BigInt(0);
+    try {
+      totalSupply = await publicClient.readContract({
+        address: pairAddress as Hex,
+        abi: PAIR_ABI,
+        functionName: 'totalSupply',
+      }) as bigint;
+    } catch (tsErr) {
+      console.warn('查询 totalSupply 失败:', tsErr);
+    }
+
     // 如果提供了账户地址，查询LP余额
     let lpBalance = '0';
     if (account && account.match(/^0x[a-fA-F0-9]{40}$/)) {
@@ -215,6 +235,7 @@ export async function POST(request: NextRequest) {
     console.log('- Token1:', token1);
     console.log('- Reserve1:', reserve1.toString());
     console.log('- Block Timestamp:', blockTimestampLast);
+    console.log('- TotalSupply:', totalSupply.toString());
     if (account) {
       console.log('- 账户:', account);
       console.log('- LP余额:', lpBalance);
@@ -230,6 +251,7 @@ export async function POST(request: NextRequest) {
           token0: token0 as string,
           token1: token1 as string,
           lpBalance: lpBalance,
+          totalSupply: totalSupply.toString(),
         },
       },
       {

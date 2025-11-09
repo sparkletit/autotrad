@@ -40,6 +40,7 @@ const SwapPageClient: React.FC = () => {
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [fromAddress, setFromAddress] = useState('');
+  const [toAddress, setToAddress] = useState('');
   const [selectedNetwork, setSelectedNetwork] = useState('fork');
   const [pairAddress, setPairAddress] = useState('');
   const [pairReserves, setPairReserves] = useState<PairReserves | null>(null);
@@ -299,6 +300,7 @@ const SwapPageClient: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           account: fromAddress,
+          toAddress: toAddress || fromAddress,
           pairAddress,
           tokenIn: selectedTokenIn,
           tokenOut: selectedTokenOut,
@@ -357,6 +359,15 @@ const SwapPageClient: React.FC = () => {
                   onChange={setFromAddress}
                   placeholder="搜索或选择账户..."
                 />
+                <div className="mt-4">
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">接收地址（可选）</label>
+                  <UnifiedAddressSelector
+                    value={toAddress}
+                    onChange={setToAddress}
+                    placeholder="默认使用账户地址"
+                  />
+                  <p className="text-xs text-gray-600 mt-1">留空则默认使用上方账户地址作为接收地址。</p>
+                </div>
               </div>
 
               {/* 第一步：交易池地址 */}

@@ -30,6 +30,12 @@ const DeFiNavigation: React.FC<DeFiNavigationProps> = ({ className = '' }) => {
       description: 'Remove liquidity from pools',
       icon: '🔓',
     },
+    {
+      name: '模拟计算器',
+      href: '/swap-pair-calculator',
+      description: '恒定乘积池模拟器',
+      icon: '🧮',
+    },
   ];
 
   return (

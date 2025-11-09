@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 5,
   },
+  turbopack: {
+    // 显式设置根目录，避免多 lockfile 导致的推断错误
+    root: __dirname,
+  },
 };
 
 export default nextConfig;

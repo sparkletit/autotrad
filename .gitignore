@@ -1,4 +1,5 @@
-/orther
+orther/
+foundry/*
 # dependencies
 /node_modules
 /.pnp
@@ -44,3 +45,4 @@ output.txt
 
 # anvil fork states
 anvil-states/
+

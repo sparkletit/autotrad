@@ -35,6 +35,15 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
   const [isForking, setIsForking] = useState(initialIsForking || false);
   const [currentConfig, setCurrentConfig] = useState<ForkConfig | null>(null);
   const [fetchingLatestBlock, setFetchingLatestBlock] = useState(false);
+  // 时间推进相关状态
+  const [currentForkTime, setCurrentForkTime] = useState<{ blockNumber: number; timestamp: number } | null>(null);
+  const [advanceSeconds, setAdvanceSeconds] = useState<string>('');
+  const [nextTimestamp, setNextTimestamp] = useState<string>('');
+  const [mineBlocks, setMineBlocks] = useState<string>('1');
+  const [intervalSeconds, setIntervalSeconds] = useState<string>('1');
+  const [timeMessage, setTimeMessage] = useState<string>('');
+  const [timeLoading, setTimeLoading] = useState<boolean>(false);
+  const [reachTimestamp, setReachTimestamp] = useState<string>('');
   const [savedStates, setSavedStates] = useState<Array<{ 
     name: string; 
     fileName: string; 
@@ -363,6 +372,94 @@ ${data.command}
     }
   };
 
+  // 获取当前 Fork 最新区块与时间戳
+  const fetchCurrentForkTime = async () => {
+    try {
+      setTimeLoading(true);
+      setTimeMessage('');
+      const res = await fetch('/api/fork/time');
+      const data = await res.json();
+      if (data.success) {
+        setCurrentForkTime(data.data);
+      } else {
+        setTimeMessage(data.error || '获取当前时间失败');
+      }
+    } catch (e: any) {
+      setTimeMessage(e?.message || '获取当前时间失败');
+    } finally {
+      setTimeLoading(false);
+    }
+  };
+
+  // 提交时间推进操作
+  const submitTimeAction = async (payload: any) => {
+    try {
+      setTimeLoading(true);
+      setTimeMessage('');
+      const res = await fetch('/api/fork/time', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCurrentForkTime(data.data);
+        setTimeMessage('✅ 操作成功');
+      } else {
+        setTimeMessage(data.error || '操作失败');
+      }
+    } catch (e: any) {
+      setTimeMessage(e?.message || '操作失败');
+    } finally {
+      setTimeLoading(false);
+    }
+  };
+
+  const handleIncreaseTime = async () => {
+    const secondsNum = Number(advanceSeconds);
+    if (!Number.isFinite(secondsNum) || secondsNum <= 0) {
+      setTimeMessage('请输入有效的秒数');
+      return;
+    }
+    await submitTimeAction({ action: 'increase', seconds: secondsNum });
+  };
+
+  const handleSetNextTimestamp = async () => {
+    const tsNum = Number(nextTimestamp);
+    if (!Number.isFinite(tsNum) || tsNum <= 0) {
+      setTimeMessage('请输入有效的 Unix 时间戳（秒）');
+      return;
+    }
+    await submitTimeAction({ action: 'set', timestamp: tsNum });
+  };
+
+  const handleMineBlocks = async () => {
+    const blocksNum = Number(mineBlocks);
+    if (!Number.isFinite(blocksNum) || blocksNum <= 0) {
+      setTimeMessage('请输入有效的出块数量');
+      return;
+    }
+    await submitTimeAction({ action: 'mine', blocks: blocksNum });
+  };
+
+  const handleSetInterval = async () => {
+    const secNum = Number(intervalSeconds);
+    if (!Number.isFinite(secNum) || secNum < 0) {
+      setTimeMessage('请输入有效的出块间隔秒数（0 关闭自动挖矿）');
+      return;
+    }
+    await submitTimeAction({ action: 'interval', seconds: secNum });
+  };
+
+  const handleReachTime = async () => {
+    const tsNum = Number(reachTimestamp);
+    if (!Number.isFinite(tsNum) || tsNum <= 0) {
+      setTimeMessage('请输入有效的目标 Unix 时间戳（秒）');
+      return;
+    }
+    await submitTimeAction({ action: 'reach', timestamp: tsNum });
+  };
+
   const selectedChainInfo = chains.find((c) => c.key === selectedChain);
 
   return (
@@ -387,13 +484,7 @@ ${data.command}
         </div>
         {isForking && (
           <div className="mt-3 flex gap-2">
-            <button
-              onClick={handleStopFork}
-              disabled={loading}
-              className="flex-1 py-2 px-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
-            >
-              {loading ? '停止中...' : '停止Fork'}
-            </button>
+
             <div className="flex-1">
               <SaveStateButton 
                 onSaved={fetchSavedStates}
@@ -445,54 +536,111 @@ ${data.command}
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <h4 className="text-sm font-medium text-green-900 mb-3">🔧 状态管理</h4>
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-green-900 mb-2">
-                  加载已保存的状态
-                </label>
-                <div className="flex gap-2">
-                  <select
-                    value={selectedState}
-                    onChange={(e) => handleStateSelect(e.target.value)}
-                    disabled={loading}
-                    className="flex-1 px-3 py-2 border border-green-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+
+
+              {/* 时间推进控制 */}
+              <div className="mt-4 border-t border-green-200 text-gray-600 pt-3">
+                <h5 className="text-xs font-semibold text-green-900 mb-2">⏱️ 时间推进</h5>
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    onClick={fetchCurrentForkTime}
+                    disabled={timeLoading}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-xs rounded"
                   >
-                    <option value="">-- 选择要加载的状态 --</option>
-                    {savedStates.map((state) => (
-                      <option key={state.name} value={state.name}>
-                        {state.name} (保存于 {new Date(state.modifiedAt).toLocaleString('zh-CN')})
-                        {state.forkConfig && ` - ${state.forkConfig.chainKey.toUpperCase()} #${state.forkConfig.blockNumber}`}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedState && (
-                    <button
-                      onClick={() => handleDeleteState(selectedState)}
-                      disabled={loading}
-                      className="px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
-                      title="删除此状态"
-                    >
-                      🗑️
-                    </button>
+                    {timeLoading ? '刷新中...' : '刷新当前时间'}
+                  </button>
+                  {currentForkTime && (
+                    <span className="text-xs text-green-900">
+                      区块 #{currentForkTime.blockNumber} · 时间 {new Date(currentForkTime.timestamp * 1000).toLocaleString('zh-CN')}
+                    </span>
                   )}
                 </div>
-                {savedStates.length === 0 && (
-                  <p className="text-xs text-green-700 mt-1">暂无保存的状态</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="number"
+                      value={advanceSeconds}
+                      onChange={(e) => setAdvanceSeconds(e.target.value)}
+                      placeholder="增加秒数"
+                      className="flex-1 px-3 py-2 border border-green-300 rounded bg-white text-sm"
+                    />
+                    <button
+                      onClick={handleIncreaseTime}
+                      disabled={timeLoading}
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm rounded"
+                    >
+                      增加并出块
+                    </button>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="number"
+                      value={reachTimestamp}
+                      onChange={(e) => setReachTimestamp(e.target.value)}
+                      placeholder="推进到目标时间戳（秒）"
+                      className="flex-1 px-3 py-2 border border-green-300 rounded bg-white text-sm"
+                    />
+                    <button
+                      onClick={handleReachTime}
+                      disabled={timeLoading}
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm rounded"
+                    >
+                      推进到指定时间
+                    </button>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="number"
+                      value={nextTimestamp}
+                      onChange={(e) => setNextTimestamp(e.target.value)}
+                      placeholder="设置下个区块时间戳（秒）"
+                      className="flex-1 px-3 py-2 border border-green-300 rounded bg-white text-sm"
+                    />
+                    <button
+                      onClick={handleSetNextTimestamp}
+                      disabled={timeLoading}
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm rounded"
+                    >
+                      设置并出块
+                    </button>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="number"
+                      value={mineBlocks}
+                      onChange={(e) => setMineBlocks(e.target.value)}
+                      placeholder="出块数量"
+                      className="flex-1 px-3 py-2 border border-green-300 rounded bg-white text-sm"
+                    />
+                    <button
+                      onClick={handleMineBlocks}
+                      disabled={timeLoading}
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm rounded"
+                    >
+                      立即出块
+                    </button>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="number"
+                      value={intervalSeconds}
+                      onChange={(e) => setIntervalSeconds(e.target.value)}
+                      placeholder="自动出块间隔秒（0 关闭）"
+                      className="flex-1 px-3 py-2 border border-green-300 rounded bg-white text-sm"
+                    />
+                    <button
+                      onClick={handleSetInterval}
+                      disabled={timeLoading}
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm rounded"
+                    >
+                      设置间隔
+                    </button>
+                  </div>
+                </div>
+                {timeMessage && (
+                  <p className="text-xs mt-2 text-green-800">{timeMessage}</p>
                 )}
               </div>
-
-              {selectedState && (
-                <button
-                  onClick={handleLoadState}
-                  disabled={loading}
-                  className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
-                >
-                  {loading ? '加载中...' : `📥 加载状态: ${selectedState}`}
-                </button>
-              )}
-
-              <p className="text-xs text-green-700">
-                💡 提示：加载状态会将保存的账户余额和合约状态覆盖到当前运行的网络中
-              </p>
             </div>
           </div>
         )}
