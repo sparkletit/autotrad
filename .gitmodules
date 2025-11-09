@@ -1,0 +1,3 @@
+[submodule "foundry/shrek/lib/forge-std"]
+	path = foundry/shrek/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
