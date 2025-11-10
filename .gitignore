@@ -1,5 +1,5 @@
 orther/
-foundry/*
+/foundry/*
 # dependencies
 /node_modules
 /.pnp
