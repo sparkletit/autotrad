@@ -14,6 +14,7 @@ import {
   getAmountIn,
   parseUnitsFromDecimalText,
   formatUnitsToDecimalText,
+  computeAddLiquidityOptimal,
 } from '@/lib/ammCalculator';
 
 export default function SwapPairCalculatorPage() {
@@ -54,6 +55,12 @@ export default function SwapPairCalculatorPage() {
   const [mint1InText, setMint1InText] = useState<string>('');
   const [lpMintOutText, setLpMintOutText] = useState<string>('');
 
+  // 最优数量（合约 addLiquidity 逻辑中的 amountTokenOptimal 显示）
+  const [amount0OptimalText, setAmount0OptimalText] = useState<string>('');
+  const [amount1OptimalText, setAmount1OptimalText] = useState<string>('');
+  // UI：是否将显示值扣除 0.25%（仅用于显示净值）
+  const [applyOptimalNetDisplay, setApplyOptimalNetDisplay] = useState<boolean>(false);
+
   const [lpBurnInText, setLpBurnInText] = useState<string>('');
   const [burn0OutText, setBurn0OutText] = useState<string>('');
   const [burn1OutText, setBurn1OutText] = useState<string>('');
@@ -61,6 +68,9 @@ export default function SwapPairCalculatorPage() {
   // 交易后储备（模拟）
   const [postReserve0, setPostReserve0] = useState<bigint>(BigInt(0));
   const [postReserve1, setPostReserve1] = useState<bigint>(BigInt(0));
+  // 手动编辑当前储备（人类单位文本）
+  const [manualReserve0Text, setManualReserve0Text] = useState<string>('');
+  const [manualReserve1Text, setManualReserve1Text] = useState<string>('');
 
   // 加载自定义代币用于自动别名与精度
   useEffect(() => {
@@ -153,6 +163,27 @@ export default function SwapPairCalculatorPage() {
   const feeBasis = 10000n;
   const feeMultiplier = useMemo(() => BigInt(Math.floor((1 - FEE_RATE) * 10000)), []);
 
+  // 应用手动储备为当前基数
+  const applyManualReserves = useCallback(() => {
+    const r0 = parseUnitsFromDecimalText(manualReserve0Text, token0Decimals);
+    const r1 = parseUnitsFromDecimalText(manualReserve1Text, token1Decimals);
+    if (r0 <= 0n || r1 <= 0n) {
+      return;
+    }
+    setReserve0(r0);
+    setReserve1(r1);
+    setPostReserve0(r0);
+    setPostReserve1(r1);
+    setLastDirection(null);
+  }, [manualReserve0Text, manualReserve1Text, token0Decimals, token1Decimals]);
+
+  // 从链上重置储备
+  const resetReservesFromChain = useCallback(() => {
+    setManualReserve0Text('');
+    setManualReserve1Text('');
+    fetchReserves();
+  }, [fetchReserves]);
+
   const simulateToken0To1 = useCallback((text: string) => {
     setAmount0InText(text);
     setLastDirection('0to1');
@@ -212,23 +243,77 @@ export default function SwapPairCalculatorPage() {
     const a1 = parseUnitsFromDecimalText(text1, token1Decimals);
     if (a0 <= 0n || a1 <= 0n) {
       setLpMintOutText('');
+      setAmount0OptimalText('');
+      setAmount1OptimalText('');
       setPostReserve0(reserve0);
       setPostReserve1(reserve1);
       return;
     }
+    // 计算最优数量建议（与 Router addLiquidityETH 的 amountTokenOptimal 同理）
+    // 传递手续费选项，使得最优数量在考虑 0.25% 费用时更贴近链上表现
+    const optimal = computeAddLiquidityOptimal(a0, a1, reserve0, reserve1, withFee);
+
+    // 使用最优存入对作为实际加入储备的数量
+    const depositA = optimal.amountA;
+    const depositB = optimal.amountB;
+    // 生效净值（扣除 0.25% 手续费）
+    const effectiveA = withFee ? (depositA * feeMultiplier) / feeBasis : depositA;
+    const effectiveB = withFee ? (depositB * feeMultiplier) / feeBasis : depositB;
+
+    // 铸造 LP 数量应基于进入储备的有效净值计算
     let liquidity: bigint = 0n;
     if (totalSupply === 0n) {
-      // 初始池：近似 sqrt(a0 * a1)
-      liquidity = intSqrt(a0 * a1);
+      // 初始池：近似 sqrt(effectiveA * effectiveB)
+      liquidity = intSqrt(effectiveA * effectiveB);
     } else {
-      const l0 = (a0 * totalSupply) / (reserve0 === 0n ? 1n : reserve0);
-      const l1 = (a1 * totalSupply) / (reserve1 === 0n ? 1n : reserve1);
+      const l0 = (effectiveA * totalSupply) / (reserve0 === 0n ? 1n : reserve0);
+      const l1 = (effectiveB * totalSupply) / (reserve1 === 0n ? 1n : reserve1);
       liquidity = l0 < l1 ? l0 : l1;
     }
     setLpMintOutText(formatUnitsToDecimalText(liquidity, 18));
-    setPostReserve0(reserve0 + a0);
-    setPostReserve1(reserve1 + a1);
-  }, [token0Decimals, token1Decimals, reserve0, reserve1, totalSupply, intSqrt]);
+
+    // 交易后储备应为：当前储备 + 当前 amountTokenOptimal（根据显示选择，毛值或净值）
+    const addAForReserves = applyOptimalNetDisplay ? effectiveA : depositA;
+    const addBForReserves = applyOptimalNetDisplay ? effectiveB : depositB;
+    setPostReserve0(reserve0 + addAForReserves);
+    setPostReserve1(reserve1 + addBForReserves);
+    if (optimal.init) {
+      // 初始池：无最优比，按输入即可
+      setAmount0OptimalText('');
+      setAmount1OptimalText('');
+    } else if (optimal.amountBOptimal !== undefined) {
+      const showVal = applyOptimalNetDisplay
+        ? (optimal.amountBOptimal * feeMultiplier) / feeBasis
+        : optimal.amountBOptimal;
+      setAmount1OptimalText(formatUnitsToDecimalText(showVal, token1Decimals));
+      setAmount0OptimalText('');
+    } else if (optimal.amountAOptimal !== undefined) {
+      const showVal = applyOptimalNetDisplay
+        ? (optimal.amountAOptimal * feeMultiplier) / feeBasis
+        : optimal.amountAOptimal;
+      setAmount0OptimalText(formatUnitsToDecimalText(showVal, token0Decimals));
+      setAmount1OptimalText('');
+    } else {
+      setAmount0OptimalText('');
+      setAmount1OptimalText('');
+    }
+  }, [token0Decimals, token1Decimals, reserve0, reserve1, totalSupply, intSqrt, withFee, applyOptimalNetDisplay]);
+
+  // 当手续费开关变更时，如果当前处于 LP 铸造场景，则重新计算最优数量展示
+  useEffect(() => {
+    if (lastDirection === 'lpMint') {
+      recalcMint(mint0InText, mint1InText);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withFee]);
+
+  // 当“显示净值”切换时，保持 LP 场景的交易后储备与 LP 计算同步
+  useEffect(() => {
+    if (lastDirection === 'lpMint') {
+      recalcMint(mint0InText, mint1InText);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyOptimalNetDisplay]);
 
   const simulateMint0Change = useCallback((text: string) => {
     setMint0InText(text);
@@ -406,6 +491,51 @@ export default function SwapPairCalculatorPage() {
             <div className="text-lg font-mono mb-2">{format(reserve0, { decimals: token0Decimals, thousandSep: true })}</div>
             <div className="text-sm text-gray-600">{alias1} (t1) 当前储备</div>
             <div className="text-lg font-mono">{format(reserve1, { decimals: token1Decimals, thousandSep: true })}</div>
+
+            {/* 手动编辑储备 */}
+            <div className="mt-4">
+              <div className="text-gray-800 font-semibold mb-2">手动调整储备（不从链上读取）</div>
+              <div className="grid grid-cols-2 gap-3 items-end">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">{alias0} (t0)</label>
+                  <input
+                    type="text"
+                    value={manualReserve0Text}
+                    onChange={(e) => setManualReserve0Text(e.target.value)}
+                    placeholder={`按 ${token0Decimals} 位小数`}
+                    className="w-full px-3 py-2 border rounded font-mono"
+                  />
+                  <div className="mt-1 text-xs text-gray-500">示例：1000 或 0.5</div>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">{alias1} (t1)</label>
+                  <input
+                    type="text"
+                    value={manualReserve1Text}
+                    onChange={(e) => setManualReserve1Text(e.target.value)}
+                    placeholder={`按 ${token1Decimals} 位小数`}
+                    className="w-full px-3 py-2 border rounded font-mono"
+                  />
+                  <div className="mt-1 text-xs text-gray-500">示例：1000000 或 2500</div>
+                </div>
+              </div>
+              <div className="mt-3 flex gap-3">
+                <button
+                  className="px-3 py-1 text-xs bg-gray-800 text-white rounded hover:bg-black"
+                  onClick={applyManualReserves}
+                  disabled={!manualReserve0Text || !manualReserve1Text}
+                >
+                  应用手动储备为当前基数
+                </button>
+                <button
+                  className="px-3 py-1 text-xs bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                  onClick={resetReservesFromChain}
+                >
+                  重置为链上储备
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-gray-600">提示：应用后，后续模拟将以你设置的储备为基数。</div>
+            </div>
           </div>
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="text-gray-800 font-semibold mb-2">价格与 K</div>
@@ -629,6 +759,37 @@ export default function SwapPairCalculatorPage() {
               <div className="text-xs text-gray-600">
                 <div>当前 LP 总量: <span className="font-mono">{format(totalSupply, { decimals: 18, thousandSep: true })}</span></div>
               </div>
+            </div>
+            {/* 最优数量建议（amountTokenOptimal 显示） */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end mt-3">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">amountTokenOptimal (t0)</label>
+                <input
+                  type="text"
+                  value={amount0OptimalText}
+                  readOnly
+                  placeholder="当以 t1 为基准时建议的 t0"
+                  className="w-full px-3 py-2 border rounded bg-gray-50 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">amountTokenOptimal (t1)</label>
+                <input
+                  type="text"
+                  value={amount1OptimalText}
+                  readOnly
+                  placeholder="当以 t0 为基准时建议的 t1"
+                  className="w-full px-3 py-2 border rounded bg-gray-50 font-mono"
+                />
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-gray-700 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={applyOptimalNetDisplay}
+                onChange={(e) => setApplyOptimalNetDisplay(e.target.checked)}
+              />
+              <span>显示净值（amountTokenOptimal × 0.9975）</span>
             </div>
             <div className="mt-3 text-xs text-gray-600">交易后储备：
               <span className="ml-2">{alias0} (t0): {format(postReserve0, { decimals: token0Decimals, thousandSep: true })}</span>

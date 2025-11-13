@@ -201,6 +201,57 @@ export function calculateInputAmount(
   };
 }
 
+export function quote(amountA: bigint, reserveA: bigint, reserveB: bigint): bigint {
+  if (amountA <= 0n) return 0n;
+  if (reserveA <= 0n || reserveB <= 0n) return 0n;
+  return (amountA * reserveB) / reserveA;
+}
+
+export function computeAddLiquidityOptimal(
+  amountADesired: bigint,
+  amountBDesired: bigint,
+  reserveA: bigint,
+  reserveB: bigint,
+  withFee: boolean = true
+): { amountA: bigint; amountB: bigint; amountAOptimal?: bigint; amountBOptimal?: bigint; init: boolean } {
+  const init = reserveA === 0n && reserveB === 0n;
+  if (init) {
+    // 初始池：不考虑手续费（或手续费影响相同），直接按输入返回
+    return { amountA: amountADesired, amountB: amountBDesired, init };
+  }
+
+  if (!withFee) {
+    // 原始 UniswapV2/Pancake addLiquidity 逻辑（不考虑手续费）
+    const amountBOptimalNoFee = quote(amountADesired, reserveA, reserveB);
+    if (amountBOptimalNoFee <= amountBDesired) {
+      return { amountA: amountADesired, amountB: amountBOptimalNoFee, amountBOptimal: amountBOptimalNoFee, init };
+    } else {
+      const amountAOptimalNoFee = quote(amountBDesired, reserveB, reserveA);
+      return { amountA: amountAOptimalNoFee, amountB: amountBDesired, amountAOptimal: amountAOptimalNoFee, init };
+    }
+  }
+
+  // 考虑 0.25% 手续费：假设转入生效数量为输入 * feeMultiplier / feeBasis
+  const feeBasis = 10000n;
+  const feeMultiplier = BigInt(Math.floor((1 - FEE_RATE) * Number(feeBasis))); // 0.9975 * 10000 = 9975
+
+  // 生效后的存入数量（扣除手续费后的净值）
+  const aEff = (amountADesired * feeMultiplier) / feeBasis;
+  const bEff = (amountBDesired * feeMultiplier) / feeBasis;
+
+  // 在生效净值维度上求最优比
+  const bEffOptimal = quote(aEff, reserveA, reserveB);
+  if (bEffOptimal <= bEff) {
+    // 回推到应提交的毛值（向上取整，保证净值不低于最优值）
+    const bGrossOptimal = (bEffOptimal * feeBasis + (feeMultiplier - 1n)) / feeMultiplier; // ceil
+    return { amountA: amountADesired, amountB: bGrossOptimal, amountBOptimal: bGrossOptimal, init };
+  } else {
+    const aEffOptimal = quote(bEff, reserveB, reserveA);
+    const aGrossOptimal = (aEffOptimal * feeBasis + (feeMultiplier - 1n)) / feeMultiplier; // ceil
+    return { amountA: aGrossOptimal, amountB: amountBDesired, amountAOptimal: aGrossOptimal, init };
+  }
+}
+
 /**
  * 经典恒定乘积 AMM 公式：给定输入数量，计算输出数量
  * getAmountOut(amountIn, reserveIn, reserveOut, withFee)

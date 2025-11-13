@@ -91,6 +91,10 @@ export function parseBlockchainError(error: any): string {
     if (revertReason) {
       return `❌ 交易被拒绝: ${revertReason}`;
     }
+    // 视图函数常见：no data present / require(false)
+    if (lowerMsg.includes('no data present') || lowerMsg.includes('require(false)')) {
+      return '❌ 视图函数执行失败：参数无效或索引越界。请检查输入是否在合法范围内。';
+    }
     return '❌ 交易被智能合约拒绝。可能原因：\n• 代币余额不足\n• 未授权转账\n• 合约条件不满足';
   }
 

@@ -239,10 +239,27 @@ export async function POST(request: NextRequest) {
       console.log('交易选项:', txOptions);
     }
     
-    // 只读函数不传递 txOptions
-    const tx = isReadOnly 
-      ? await contract[function_name](...paramsArray)
-      : await contract[function_name](...paramsArray, txOptions);
+    // 只读函数不传递 txOptions；在只读场景下捕获回退并返回 400
+    let tx: any;
+    if (isReadOnly) {
+      try {
+        tx = await contract[function_name](...paramsArray);
+      } catch (err: any) {
+        const friendlyErrorMessage = parseBlockchainError(err);
+        const lowerMsg = String(err?.message || err).toLowerCase();
+        const isParamIssue = lowerMsg.includes('revert') || lowerMsg.includes('execution reverted');
+        return NextResponse.json(
+          {
+            success: false,
+            error: friendlyErrorMessage,
+            details: err?.message || String(err),
+          },
+          { status: isParamIssue ? 400 : 500 }
+        );
+      }
+    } else {
+      tx = await contract[function_name](...paramsArray, txOptions);
+    }
     
     // 等待交易完成并获取交易回执
     // 检查tx是否是一个交易对象（有wait方法）
