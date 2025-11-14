@@ -46,3 +46,4 @@ output.txt
 # anvil fork states
 anvil-states/
 
+docker/logs/*
