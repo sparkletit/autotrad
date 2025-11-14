@@ -1,16 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createPublicClient, http, parseEther, formatEther } from 'viem';
 import { Hex } from 'viem';
-
-const getRpcUrl = (network: string): string => {
-  const rpcUrls: Record<string, string> = {
-    fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
-    ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
-    bsc: 'https://bsc-dataseed1.bnbchain.org',
-    polygon: 'https://polygon-rpc.com',
-  };
-  return rpcUrls[network] || rpcUrls.fork;
-};
+import { getRpcUrl, ok, fail } from '@/lib/serverUtils';
 
 // WBNB 地址（不同网络）
 const WBNB_ADDRESSES: Record<string, Hex> = {
@@ -44,18 +35,12 @@ export async function POST(request: NextRequest) {
 
     // 参数验证
     if (!account || !amount) {
-      return NextResponse.json(
-        { success: false, error: '缺少必要参数：account, amount' },
-        { status: 400 }
-      );
+      return fail('缺少必要参数：account, amount', 400);
     }
 
     // 验证账户地址格式
     if (!account.match(/^0x[a-fA-F0-9]{40}$/)) {
-      return NextResponse.json(
-        { success: false, error: '无效的账户地址格式' },
-        { status: 400 }
-      );
+      return fail('无效的账户地址格式', 400);
     }
 
     const rpcUrl = getRpcUrl(network);
@@ -85,13 +70,7 @@ export async function POST(request: NextRequest) {
     if (bnbBalance < amountInWei) {
       const errorMsg = `账户余额不足。当前余额: ${formatEther(bnbBalance)} BNB，需要: ${amount} BNB。\n\n如果您已使用Mint资产功能，余额可能在Anvil中未更新，请稍后重试或刷新页面。`;
       console.error(errorMsg);
-      return NextResponse.json(
-        {
-          success: false,
-          error: errorMsg,
-        },
-        { status: 400 }
-      );
+      return fail(errorMsg, 400);
     }
 
     // 获取 WBNB 地址
@@ -275,56 +254,34 @@ export async function POST(request: NextRequest) {
           console.log('账户签名权限已取消');
         }
 
-        return NextResponse.json({
-          success: true,
-          data: {
-            txHash,
-            account,
-            amountBNB: amount,
-            amountWBNB: amount,
-            wbnbAddress,
-            network,
-            timestamp: new Date().toISOString(),
-            message: `成功将 ${amount} BNB 包装为 WBNB`,
-            balances: {
-              wbnb: {
-                after: formatEther(wbnbBalanceAfter),
-              },
-            },
-          },
+        return ok({
+          txHash,
+          account,
+          amountBNB: amount,
+          amountWBNB: amount,
+          wbnbAddress,
+          network,
+          timestamp: new Date().toISOString(),
+          message: `成功将 ${amount} BNB 包装为 WBNB`,
+          balances: { wbnb: { after: formatEther(wbnbBalanceAfter) } },
         });
       } catch (error) {
         console.error('执行 WBNB 包装交易失败:', error);
-        return NextResponse.json(
-          {
-            success: false,
-            error: error instanceof Error ? error.message : '执行交易失败',
-          },
-          { status: 500 }
-        );
+        return fail(error instanceof Error ? error.message : '执行交易失败', 500);
       }
     }
 
     // 对于其他网络，返回需要签名的信息
-    return NextResponse.json({
-      success: true,
-      data: {
-        account,
-        amountBNB: amount,
-        wbnbAddress,
-        message: '在真实网络上包装 WBNB 需要钱包签名',
-        network,
-      },
+    return ok({
+      account,
+      amountBNB: amount,
+      wbnbAddress,
+      message: '在真实网络上包装 WBNB 需要钱包签名',
+      network,
     });
   } catch (error) {
     console.error('包装 WBNB 失败:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : '包装 WBNB 失败',
-      },
-      { status: 500 }
-    );
+    return fail(error instanceof Error ? error.message : '包装 WBNB 失败', 500);
   }
 }
 

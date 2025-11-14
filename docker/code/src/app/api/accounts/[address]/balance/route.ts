@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createPublicClient, http, Hex } from 'viem';
 import { formatBalance } from '@/lib/utils';
+import { getRpcUrl, ok, fail, parseBlockchainError } from '@/lib/serverUtils';
 
 /**
  * GET /api/accounts/[address]/balance
@@ -14,13 +15,10 @@ export async function GET(
     const { address } = await params;
 
     if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
-      return NextResponse.json(
-        { success: false, error: '无效的以太坊地址' },
-        { status: 400 }
-      );
+      return fail('无效的以太坊地址', 400);
     }
 
-    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
+    const rpcUrl = getRpcUrl('fork');
     const publicClient = createPublicClient({
       transport: http(rpcUrl),
     });
@@ -32,19 +30,13 @@ export async function GET(
 
    const formatted = formatBalance(BigInt(balance), 18);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        balance: balance.toString(),
-        formatted,
-        symbol: 'BNB',
-      },
+    return ok({
+      balance: balance.toString(),
+      formatted,
+      symbol: 'BNB',
     });
   } catch (error) {
     console.error('获取账户余额失败:', error);
-    return NextResponse.json(
-      { success: false, error: '获取账户余额失败' },
-      { status: 500 }
-    );
+    return fail(parseBlockchainError(error), 500);
   }
 }

@@ -22,23 +22,12 @@ export default function CreateMainAccountModal({ onClose, onSuccess }: Props) {
       setLoading(true);
       setError('');
 
-      const response = await fetch('/api/address-books/main-accounts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          accountName: accountName.trim(),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await apiService.post('/api/address-books/main-accounts', { accountName: accountName.trim() });
+      if (success) {
         alert('主账号创建成功！请妥善保存助记词和私钥。');
         onSuccess();
       } else {
-        setError(data.error || '创建失败，请稍后重试');
+        setError(error || '创建失败，请稍后重试');
       }
     } catch (err) {
       setError('创建失败，请稍后重试');
@@ -105,3 +94,4 @@ export default function CreateMainAccountModal({ onClose, onSuccess }: Props) {
     </div>
   );
 }
+import apiService from '@/lib/apiService';

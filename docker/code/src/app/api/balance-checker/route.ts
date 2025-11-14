@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createPublicClient, http } from 'viem';
 import type { Address } from 'viem';
 import { formatBalance, normalizeAddress } from '@/lib/utils';
+import { getRpcUrl, ok, fail, parseBlockchainError } from '@/lib/serverUtils';
 
 /**
  * GET /api/balance-checker?address=0x...&network=fork&tokens=[{address,symbol}]
@@ -14,36 +15,11 @@ export async function GET(request: NextRequest) {
     const network = searchParams.get('network') || 'fork';
     const tokensParam = searchParams.get('tokens');
 
-    if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
-      return NextResponse.json(
-        { success: false, error: '无效的以太坊地址' },
-        { status: 400 }
-      );
-    }
+    if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) { return fail('无效的以太坊地址', 400); }
     let checksumAddress: Address;
-    try {
-      checksumAddress = normalizeAddress(address);
-    } catch (e) {
-      return NextResponse.json(
-        { success: false, error: '无效的以太坊地址' },
-        { status: 400 }
-      );
-    }
+    try { checksumAddress = normalizeAddress(address); } catch (e) { return fail('无效的以太坊地址', 400); }
 
-    const networkConfig: { [key: string]: string } = {
-      fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
-      ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
-      bsc: 'https://bsc-dataseed1.bnbchain.org',
-      polygon: 'https://polygon-rpc.com',
-    };
-
-    const rpcUrl = networkConfig[network];
-    if (!rpcUrl) {
-      return NextResponse.json(
-        { success: false, error: '不支持的网络' },
-        { status: 400 }
-      );
-    }
+    const rpcUrl = getRpcUrl(network);
 
     const publicClient = createPublicClient({
       transport: http(rpcUrl),
@@ -147,19 +123,10 @@ export async function GET(request: NextRequest) {
     // 是否有至少一个成功的余额
     const hasAtLeastOneBalance = balances.length > 0;
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        address: checksumAddress,
-        network,
-        balances,
-      },
-    });
+    return ok({ address: checksumAddress, network, balances });
   } catch (error) {
     console.error('查询余额失败:', error);
-    return NextResponse.json(
-      { success: false, error: '查询余额失败' },
-      { status: 500 }
-    );
+    const msg = parseBlockchainError(error);
+    return fail(msg, 500);
   }
 }

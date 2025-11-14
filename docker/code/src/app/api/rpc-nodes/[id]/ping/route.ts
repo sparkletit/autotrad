@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import mysql from 'mysql2/promise';
+import { ok, fail, serverFetch } from '@/lib/serverUtils';
 
 const dbConfig = {
   host: process.env.MYSQL_HOST || 'mysql',
@@ -28,13 +29,7 @@ export async function POST(
       [id]
     );
 
-    if ((nodeRows as any[]).length === 0) {
-      await connection.end();
-      return NextResponse.json(
-        { success: false, error: 'RPC节点不存在' },
-        { status: 404 }
-      );
-    }
+    if ((nodeRows as any[]).length === 0) { await connection.end(); return fail('RPC节点不存在', 404); }
 
     const node = (nodeRows as any[])[0];
     const rpcUrl = node.rpc_url;
@@ -46,17 +41,11 @@ export async function POST(
     let errorMsg = '';
 
     try {
-      const response = await fetch(rpcUrl, {
+      const response = await serverFetch(rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_chainId',
-          params: [],
-          id: 1,
-        }),
-        signal: AbortSignal.timeout(5000),
-      });
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_chainId', params: [], id: 1 }),
+      }, 5000);
 
       latency = Date.now() - startTime;
 
@@ -85,16 +74,9 @@ export async function POST(
 
     await connection.end();
 
-    return NextResponse.json({
-      success: success,
-      latency: latency,
-      message: success ? `PING成功 (${latency}ms)` : `PING失败: ${errorMsg}`,
-    });
+    return ok({ success, latency, message: success ? `PING成功 (${latency}ms)` : `PING失败: ${errorMsg}` });
   } catch (error) {
     console.error('PING RPC节点失败:', error);
-    return NextResponse.json(
-      { success: false, error: 'PING RPC节点失败' },
-      { status: 500 }
-    );
+    return fail('PING RPC节点失败', 500);
   }
 }

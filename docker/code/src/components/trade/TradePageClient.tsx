@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
 import { fetchCustomTokens, fetchAddressAliases, fetchTokenBalances, type CustomToken } from '@/lib/addressService';
+import apiService from '@/lib/apiService';
+import { transfer, getStatus } from '@/lib/transferService';
+import { useNetwork } from '@/lib/networkStore';
 
 interface ChainInfo {
   chainId: number;
@@ -47,7 +50,7 @@ const TradePageClient: React.FC = () => {
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [selectedToken, setSelectedToken] = useState('BNB');
-  const [selectedNetwork, setSelectedNetwork] = useState('fork');
+  const net = useNetwork();
   const [tokenSearchKeyword, setTokenSearchKeyword] = useState('');
   const [showTokenDropdown, setShowTokenDropdown] = useState(false);
 
@@ -88,7 +91,7 @@ const TradePageClient: React.FC = () => {
     fetchChainInfo();
     const interval = setInterval(fetchChainInfo, 5000);
     return () => clearInterval(interval);
-  }, [selectedNetwork]);
+  }, [net]);
 
   useEffect(() => {
     if (fromAddress) {
@@ -96,7 +99,7 @@ const TradePageClient: React.FC = () => {
         setBalancesLoading(true);
         try {
           const tokensForQuery = (customTokens && customTokens.length > 0) ? customTokens : undefined;
-          const balances = await fetchTokenBalances(fromAddress, tokensForQuery, selectedNetwork);
+          const balances = await fetchTokenBalances(fromAddress, tokensForQuery, net);
           setTokenBalances(balances);
           setSelectedToken('BNB');
         } catch (err) {
@@ -123,7 +126,7 @@ const TradePageClient: React.FC = () => {
       };
       loadBalances();
     }
-  }, [fromAddress, customTokens, selectedNetwork]);
+  }, [fromAddress, customTokens, net]);
 
   // 关闭代币下拉框的外部点击处理
   useEffect(() => {
@@ -140,10 +143,9 @@ const TradePageClient: React.FC = () => {
   const fetchChainInfo = async () => {
     try {
       setChainLoading(true);
-      const response = await fetch(`/api/fork/chain-info?network=${selectedNetwork}`);
-      const data = await response.json();
-      if (data.success) {
-        setChainInfo(data.data);
+      const { success, data } = await apiService.get(`/api/fork/chain-info?network=${net}`);
+      if (success) {
+        setChainInfo((data as any));
       }
     } catch (err) {
       console.error('获取链信息失败:', err);
@@ -264,22 +266,15 @@ const TradePageClient: React.FC = () => {
       };
       console.log('请求体:', requestBody);
 
-      const response = await fetch('/api/transfer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
+      const { success, data, error } = await transfer(requestBody);
+      console.log('响应数据:', { success, data, error });
 
-      console.log('收到响应，状态码:', response.status);
-      const data = await response.json();
-      console.log('响应数据:', data);
-
-      if (data.success) {
+      if (success) {
         console.log('✅ 交易已提交，等待确认...');
         // 交易已提交，设置状态为 pending
-        setTxHash(data.txHash);
+        setTxHash((data as any)?.txHash);
         setTxStatus('pending');
-        setSuccess(`交易已提交，等待确认中...\n\n交易哈希: ${data.txHash}`);
+        setSuccess(`交易已提交，等待确认中...\n\n交易哈希: ${(data as any)?.txHash}`);
         setError('');
         setToAddress('');
         setAmount('');
@@ -288,10 +283,10 @@ const TradePageClient: React.FC = () => {
         setLoading(false);
         
         // 立即检查一次交易状态
-        checkTransactionStatus(data.txHash);
+        checkTransactionStatus((data as any)?.txHash);
         
         // 异步刷新余额（不阻塞 UI）
-        fetchTokenBalances(fromAddress, (customTokens && customTokens.length > 0) ? customTokens : undefined, selectedNetwork)
+        fetchTokenBalances(fromAddress, (customTokens && customTokens.length > 0) ? customTokens : undefined, net)
           .then((balances: TokenBalance[]) => {
             setTokenBalances(balances);
           })
@@ -299,15 +294,15 @@ const TradePageClient: React.FC = () => {
             console.warn('刷新余额失败:', err);
           });
       } else {
-        console.error('❌ 转账失败:', data.error);
-        setError(data.error || '转账失败');
+        console.error('❌ 转账失败:', error);
+        setError(error || '转账失败');
         setLoading(false);
         
         // 转账失败时也刷新余额，确保状态同步
         // 只刷新选中代币的余额，避免清空其他代币的余额信息
         const tokenObjFail = customTokens.find((t) => t.symbol === selectedToken);
         const queryTokensFail = selectedToken === 'BNB' ? undefined : (tokenObjFail ? [tokenObjFail] : []);
-        fetchTokenBalances(fromAddress, queryTokensFail, selectedNetwork)
+        fetchTokenBalances(fromAddress, queryTokensFail, net)
           .then((newBalances: TokenBalance[]) => {
             // 合并新旧余额，保留已存在的代币余额
             setTokenBalances(prevBalances => {
@@ -333,7 +328,7 @@ const TradePageClient: React.FC = () => {
         // 只刷新选中代币的余额，避免清空其他代币的余额信息
         const tokenObjErr = customTokens.find((t) => t.symbol === selectedToken);
         const queryTokensErr = selectedToken === 'BNB' ? undefined : (tokenObjErr ? [tokenObjErr] : []);
-        fetchTokenBalances(fromAddress, queryTokensErr, selectedNetwork)
+        fetchTokenBalances(fromAddress, queryTokensErr, net)
           .then((newBalances: TokenBalance[]) => {
             // 合并新旧余额，保留已存在的代币余额
             setTokenBalances(prevBalances => {
@@ -358,13 +353,13 @@ const TradePageClient: React.FC = () => {
     
     setCheckingStatus(true);
     try {
-      const response = await fetch(`/api/transfer/status?txHash=${encodeURIComponent(hash)}`);
-      const data = await response.json();
+      const { success, data } = await getStatus(hash);
+      const payload = data as any;
       
-      if (data.success) {
-        setTxStatus(data.status);
+      if (success) {
+        setTxStatus(payload.status);
         
-        if (data.status === 'confirmed') {
+        if (payload.status === 'confirmed') {
           setSuccess(`✅ 交易已确认！\n\n交易哈希: ${hash}`);
           // 交易确认后刷新余额
           fetchTokenBalances(fromAddress, (customTokens && customTokens.length > 0) ? customTokens : undefined, selectedNetwork)
@@ -374,14 +369,14 @@ const TradePageClient: React.FC = () => {
             .catch(err => {
               console.warn('刷新余额失败:', err);
             });
-        } else if (data.status === 'failed') {
+        } else if (payload.status === 'failed') {
           setError(`❌ 交易失败\n\n交易哈希: ${hash}`);
           setTxStatus('failed');
-        } else if (data.status === 'pending') {
+        } else if (payload.status === 'pending') {
           setSuccess(`交易等待确认中...\n\n交易哈希: ${hash}\n\n状态: 待确认`);
         }
       } else {
-        console.error('检查交易状态失败:', data.error);
+        console.error('检查交易状态失败:', (data as any)?.error);
       }
     } catch (err) {
       console.error('检查交易状态异常:', err);
@@ -426,20 +421,7 @@ const TradePageClient: React.FC = () => {
                     {chainInfo?.blockNumber || '加载中...'}
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">选择网络</p>
-                  <select
-                    value={selectedNetwork}
-                    onChange={(e) => setSelectedNetwork(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {networks.map((net) => (
-                      <option key={net.id} value={net.id}>
-                        {net.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* 网络选择已统一到 Header */}
               </div>
             </div>
           </div>

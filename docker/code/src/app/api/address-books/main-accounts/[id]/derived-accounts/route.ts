@@ -1,5 +1,6 @@
 import { generateDerivedAccount, getDerivedAccounts } from '@/lib/walletService';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { ok, fail } from '@/lib/serverUtils';
 
 // GET - 获取派生账号列表
 export async function GET(
@@ -11,19 +12,10 @@ export async function GET(
     const mainAccountId = parseInt(id);
     const accounts = await getDerivedAccounts(mainAccountId);
     
-    return NextResponse.json({
-      success: true,
-      data: accounts,
-    });
+    return ok(accounts);
   } catch (error) {
     console.error('获取派生账号失败:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: '获取派生账号失败',
-      },
-      { status: 500 }
-    );
+    return fail('获取派生账号失败', 500);
   }
 }
 
@@ -38,25 +30,9 @@ export async function POST(
     const { accountName, derivationIndex } = body;
     const mainAccountId = parseInt(id);
 
-    if (!accountName) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: '账号名称不能为空',
-        },
-        { status: 400 }
-      );
-    }
+    if (!accountName) { return fail('账号名称不能为空', 400); }
 
-    if (typeof derivationIndex !== 'number') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: '派生索引不能为空',
-        },
-        { status: 400 }
-      );
-    }
+    if (typeof derivationIndex !== 'number') { return fail('派生索引不能为空', 400); }
 
     const result = await generateDerivedAccount(
       mainAccountId,
@@ -64,18 +40,9 @@ export async function POST(
       accountName
     );
 
-    return NextResponse.json({
-      success: true,
-      data: result,
-    });
+    return ok(result);
   } catch (error) {
     console.error('创建派生账号失败:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: '创建派生账号失败',
-      },
-      { status: 500 }
-    );
+    return fail('创建派生账号失败', 500);
   }
 }

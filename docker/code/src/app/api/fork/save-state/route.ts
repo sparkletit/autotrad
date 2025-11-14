@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { writeFile, mkdir, unlink } from 'fs/promises';
 import { join } from 'path';
 import pool from '@/lib/db';
+import { ok, fail, serverFetch } from '@/lib/serverUtils';
 
 /**
  * POST /api/fork/save-state
@@ -12,12 +13,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { stateName, rpcUrl, blockNumber, chainId, chainKey } = body;
 
-    if (!stateName) {
-      return NextResponse.json(
-        { success: false, error: '请提供状态名称' },
-        { status: 400 }
-      );
-    }
+    if (!stateName) { return fail('请提供状态名称', 400); }
 
     // Fork 参数是可选的（如果没有提供，只保存状态文件，不保存到数据库）
     // 优先通过 rpcUrl 从数据库查找 chainKey 和 chainId（最准确的方法）
@@ -83,27 +79,16 @@ export async function POST(request: NextRequest) {
     const hasForkParams = finalRpcUrl && blockNumber !== undefined && finalChainId !== undefined;
 
     // 验证状态名称（只允许字母、数字、下划线、中划线）
-    if (!/^[a-zA-Z0-9_-]+$/.test(stateName)) {
-      return NextResponse.json(
-        { success: false, error: '状态名称只能包含字母、数字、下划线和中划线' },
-        { status: 400 }
-      );
-    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(stateName)) { return fail('状态名称只能包含字母、数字、下划线和中划线', 400); }
 
     console.log(`正在保存网络状态: ${stateName}`);
 
     // 调用 Anvil 的 anvil_dumpState RPC 方法
     const anvilRpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
-    const response = await fetch(anvilRpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'anvil_dumpState',
-        params: [],
-        id: 1,
-      }),
-    });
+    const response = await serverFetch(anvilRpcUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'anvil_dumpState', params: [], id: 1 }),
+    }, 15000);
 
     const result = await response.json();
 
@@ -158,25 +143,16 @@ export async function POST(request: NextRequest) {
       console.warn(`⚠️ 未提供 fork 参数，只保存状态文件`);
     }
 
-    return NextResponse.json({
-      success: true,
+    return ok({
       message: `网络状态已保存为 "${stateName}"${hasForkParams ? '（含 fork 参数）' : '（仅状态文件）'}`,
       fileName,
       filePath,
-      forkConfig: hasForkParams ? {
-        rpcUrl: finalRpcUrl,
-        blockNumber,
-        chainId: finalChainId,
-        chainKey: finalChainKey || null,
-      } : null,
+      forkConfig: hasForkParams ? { rpcUrl: finalRpcUrl, blockNumber, chainId: finalChainId, chainKey: finalChainKey || null } : null,
     });
   } catch (error) {
     console.error('保存网络状态失败:', error);
     const errorMessage = error instanceof Error ? error.message : '保存失败';
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return fail(errorMessage, 500);
   }
 }
 
@@ -236,28 +212,17 @@ export async function GET() {
         })
       );
 
-      return NextResponse.json({
-        success: true,
-        states: states.sort((a, b) => 
-          new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
-        ),
-      });
+      return ok(states.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()));
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         // 目录不存在，返回空列表
-        return NextResponse.json({
-          success: true,
-          states: [],
-        });
+        return ok([]);
       }
       throw err;
     }
   } catch (error) {
     console.error('获取状态列表失败:', error);
-    return NextResponse.json(
-      { success: false, error: '获取状态列表失败' },
-      { status: 500 }
-    );
+    return fail('获取状态列表失败', 500);
   }
 }
 
@@ -270,12 +235,7 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const stateName = searchParams.get('stateName');
 
-    if (!stateName) {
-      return NextResponse.json(
-        { success: false, error: '请提供状态名称' },
-        { status: 400 }
-      );
-    }
+    if (!stateName) { return fail('请提供状态名称', 400); }
 
     console.log(`正在删除状态: ${stateName}`);
 
@@ -305,17 +265,10 @@ export async function DELETE(request: NextRequest) {
       connection.release();
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `状态 "${stateName}" 已删除`,
-    });
+    return ok({ message: `状态 "${stateName}" 已删除` });
   } catch (error) {
     console.error('删除状态失败:', error);
     const errorMessage = error instanceof Error ? error.message : '删除失败';
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return fail(errorMessage, 500);
   }
 }
-

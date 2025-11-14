@@ -7,6 +7,7 @@ import {
 } from 'viem';
 import { forkManager } from './forkService';
 import { formatBalance } from './utils';
+import { rpcCall, getRpcUrl } from './serverUtils';
 
 // BNB链资产配置
 const MAINNET_TOKENS = {
@@ -66,8 +67,7 @@ function getForkClient() {
  */
 export async function getBalance(address: string): Promise<string> {
   try {
-    // 使用环境变量配置的 RPC URL
-    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
+    const rpcUrl = getRpcUrl('fork');
     const publicClient = createPublicClient({
       transport: http(rpcUrl),
     });
@@ -87,28 +87,14 @@ export async function getBalance(address: string): Promise<string> {
  */
 export async function mintETH(address: string, amount: string): Promise<string> {
   try {
-    // 使用环境变量配置的 RPC URL
-    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
-
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'anvil_setBalance',
-        params: [address, `0x${parseEther(amount).toString(16)}`],
-        id: 1,
-      }),
-    });
-
-    const result = await response.json();
-
-    if (result.error) {
-      throw new Error(result.error.message || 'Mint失败');
-    }
-
+    const rpcUrl = getRpcUrl('fork');
+    const result = await rpcCall<string>(
+      rpcUrl,
+      'anvil_setBalance',
+      [address, `0x${parseEther(amount).toString(16)}`]
+    );
     console.log(`成功mint ${amount} BNB 到 ${address}`);
-    return result.result;
+    return result;
   } catch (error) {
     console.error('Mint BNB失败:', error);
     throw error;

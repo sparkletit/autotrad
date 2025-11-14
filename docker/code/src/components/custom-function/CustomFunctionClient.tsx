@@ -2,6 +2,7 @@
 
 
 import React, { useState, useEffect } from 'react';
+import apiService from '@/lib/apiService';
 import Header from '@/components/Header';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
 import { fetchAllAccounts } from '@/lib/addressService';
@@ -126,17 +127,15 @@ const CustomFunctionPage: React.FC = () => {
     try {
       setLoadingTemplates(true);
       // 获取历史模板（排除预制模板）
-      const historyResponse = await fetch('/api/custom-functions?exclude_preset=true');
-      const historyData = await historyResponse.json();
-      if (historyData.success) {
-        setTemplates(historyData.data || []);
+      const { success: hSucc, data: hData } = await apiService.get('/api/custom-functions?exclude_preset=true');
+      if (hSucc) {
+        setTemplates((hData as any) || []);
       }
       
       // 获取预制模板
-      const presetResponse = await fetch('/api/custom-functions?preset_only=true');
-      const presetData = await presetResponse.json();
-      if (presetData.success) {
-        setPresetTemplates(presetData.data || []);
+      const { success: pSucc, data: pData } = await apiService.get('/api/custom-functions?preset_only=true');
+      if (pSucc) {
+        setPresetTemplates((pData as any) || []);
       }
     } catch (err) {
       console.error('获取模板列表失败:', err);
@@ -152,19 +151,16 @@ const CustomFunctionPage: React.FC = () => {
     
     try {
       setLoadingTemplates(true);
-      const response = await fetch('/api/custom-functions/migrate', {
-        method: 'POST',
-      });
-      const data = await response.json();
-      if (data.success) {
-        if (data.data.migrated) {
+      const { success, data, error } = await apiService.post('/api/custom-functions/migrate');
+      if (success) {
+        if ((data as any)?.migrated) {
           setSuccess('数据库迁移成功！现在可以初始化预制模板了。');
         } else {
           setSuccess('数据库已是最新版本，无需迁移。');
         }
         await fetchTemplates();
       } else {
-        setError(data.error || '迁移失败');
+        setError(error || '迁移失败');
       }
     } catch (err) {
       console.error('数据库迁移失败:', err);
@@ -181,17 +177,14 @@ const CustomFunctionPage: React.FC = () => {
     
     try {
       setLoadingTemplates(true);
-      const response = await fetch('/api/custom-functions/init-presets', {
-        method: 'POST',
-      });
-      const data = await response.json();
-      if (data.success) {
-        setSuccess(`成功初始化 ${data.data.count} 个预制模板`);
+      const { success, data, error } = await apiService.post('/api/custom-functions/init-presets');
+      if (success) {
+        setSuccess(`成功初始化 ${((data as any)?.count) || 0} 个预制模板`);
         await fetchTemplates();
       } else {
-        setError(data.error || '初始化失败');
+        setError(error || '初始化失败');
         // 如果是因为缺少字段，提示用户执行迁移
-        if (data.error && data.error.includes('is_preset')) {
+        if (error && error.includes('is_preset')) {
           setTimeout(() => {
             if (confirm('需要先执行数据库迁移。是否现在执行？')) {
               handleMigrate();
@@ -246,49 +239,38 @@ const CustomFunctionPage: React.FC = () => {
       console.log('合约:', contractAddress);
 
       // 执行函数
-      const executeResponse = await fetch('/api/custom-functions/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account_address: selectedAccount,
-          contract_address: contractAddress,
-          abi_content: abiContent,
-          function_name: selectedFunction,
-          params: paramsArray,
-          gas_limit: gasLimit === 'auto' ? 'auto' : customGasLimit,
-          value: ethValue || '0',
-        }),
+      const { success: eSucc, data: eData, error: eErr } = await apiService.post('/api/custom-functions/execute', {
+        account_address: selectedAccount,
+        contract_address: contractAddress,
+        abi_content: abiContent,
+        function_name: selectedFunction,
+        params: paramsArray,
+        gas_limit: gasLimit === 'auto' ? 'auto' : customGasLimit,
+        value: ethValue || '0',
       });
 
-      const executeData = await executeResponse.json();
-      if (!executeData.success) {
-        setError(executeData.error || '执行失败');
+      if (!eSucc) {
+        setError(eErr || '执行失败');
         setLoading(false);
         return;
       }
 
       setSuccess('函数执行成功！');
-      setTxHash(executeData.txHash);
-      setResult(executeData.result);
+      setTxHash((eData as any)?.txHash);
+      setResult((eData as any)?.result);
 
       // 保存到数据库
-      const saveResponse = await fetch('/api/custom-functions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account_address: selectedAccount,
-          contract_address: contractAddress,
-          abi_content: abiContent,
-          function_name: selectedFunction,
-          params_json: JSON.stringify(functionParams),
-          description: description || null,
-        }),
+      const { success: sSucc2, data: sData2 } = await apiService.post('/api/custom-functions', {
+        account_address: selectedAccount,
+        contract_address: contractAddress,
+        abi_content: abiContent,
+        function_name: selectedFunction,
+        params_json: JSON.stringify(functionParams),
+        description: description || null,
       });
-
-      const saveData = await saveResponse.json();
-      if (saveData.success) {
+      if (sSucc2) {
         // 根据是否已存在显示不同消息
-        if (saveData.data?.existed) {
+        if ((sData2 as any)?.existed) {
           setSuccess('函数执行成功！模板已存在，无需重复保存');
         } else {
           setSuccess('函数执行成功！已保存为新模板');
@@ -319,15 +301,12 @@ const CustomFunctionPage: React.FC = () => {
     if (!confirm(message)) return;
 
     try {
-      const response = await fetch(`/api/custom-functions?id=${id}`, {
-        method: 'DELETE',
-      });
-      const data = await response.json();
-      if (data.success) {
+      const { success, error } = await apiService.delete(`/api/custom-functions?id=${id}`);
+      if (success) {
         setSuccess('模板删除成功');
         await fetchTemplates();
       } else {
-        setError(data.error || '删除失败');
+        setError(error || '删除失败');
       }
     } catch (err) {
       console.error('删除模板失败:', err);

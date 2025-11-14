@@ -3,18 +3,9 @@ import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, 
 import { privateKeyToAccount } from 'viem/accounts';
 import { bsc } from 'viem/chains';
 import { Hex, Address } from 'viem';
-import { getPrivateKeyFromDatabase, parseBlockchainError } from '@/lib/serverUtils';
+import { getPrivateKeyFromDatabase, parseBlockchainError, getRpcUrl, createHttpTransport } from '@/lib/serverUtils';
 import { ZERO_ADDRESS, normalizeAddress, tryNormalizeAddress, safeReadDecimals } from '@/lib/utils';
 
-const getRpcUrl = (network: string): string => {
-  const rpcUrls: Record<string, string> = {
-    fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
-    ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
-    bsc: 'https://bsc-dataseed1.bnbchain.org',
-    polygon: 'https://polygon-rpc.com',
-  };
-  return rpcUrls[network] || rpcUrls.fork;
-};
 
 // Pair ABI
 const PAIR_ABI = [
@@ -176,11 +167,7 @@ export async function POST(request: NextRequest) {
     debugCtx.rpcUrl = rpcUrl;
     const accountSigner = privateKeyToAccount(privateKey as Hex);
     
-    const transport = http(rpcUrl, {
-      timeout: 0,       // 永不超时
-      retryCount: 3,
-      retryDelay: 1000,
-    });
+    const transport = createHttpTransport(rpcUrl, { timeout: 0, retryCount: 3, retryDelay: 1000 });
     
     const publicClient = createPublicClient({
       chain: bsc,

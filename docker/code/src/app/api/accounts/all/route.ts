@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import mysql from 'mysql2/promise';
+import { ok, fail } from '@/lib/serverUtils';
 
 const dbConfig = {
   host: 'mysql',
@@ -55,16 +56,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
-      success: true,
-      data: accounts,
-    });
+    return ok(accounts);
   } catch (error) {
     console.error('获取账户列表失败:', error);
     if (connection) await connection.end();
-    return NextResponse.json(
-      { success: false, error: '获取账户列表失败' },
-      { status: 500 }
-    );
+    return fail('获取账户列表失败', 500);
   }
 }

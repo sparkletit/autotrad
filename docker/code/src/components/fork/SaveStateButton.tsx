@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import apiService from '@/lib/apiService';
 
 interface SaveStateButtonProps {
   onSaved?: () => void;
@@ -45,15 +46,8 @@ const SaveStateButton: React.FC<SaveStateButtonProps> = ({ onSaved, forkConfig }
         requestBody.chainKey = forkConfig.chainKey;
       }
 
-      const response = await fetch('/api/fork/save-state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await apiService.post('/api/fork/save-state', requestBody);
+      if (success) {
         setSuccess(`状态已保存为 "${stateName}"${forkConfig ? '（含 fork 参数）' : ''}`);
         onSaved?.(); // 通知父组件刷新状态列表
         setTimeout(() => {
@@ -62,7 +56,7 @@ const SaveStateButton: React.FC<SaveStateButtonProps> = ({ onSaved, forkConfig }
           setSuccess('');
         }, 2000);
       } else {
-        setError(data.error || '保存失败');
+        setError(error || '保存失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
@@ -90,8 +84,8 @@ const SaveStateButton: React.FC<SaveStateButtonProps> = ({ onSaved, forkConfig }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4 relative z-50">
         <h3 className="text-xl font-bold text-gray-900 mb-4">
           保存 Fork 网络状态
         </h3>
@@ -151,4 +145,3 @@ const SaveStateButton: React.FC<SaveStateButtonProps> = ({ onSaved, forkConfig }
 };
 
 export default SaveStateButton;
-

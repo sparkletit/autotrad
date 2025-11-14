@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import SaveStateButton from '@/components/fork/SaveStateButton';
+import apiService from '@/lib/apiService';
 
 interface Chain {
   key: string;
@@ -76,10 +77,9 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
   // 获取已保存的状态列表
   const fetchSavedStates = async () => {
     try {
-      const response = await fetch('/api/fork/save-state');
-      const data = await response.json();
-      if (data.success) {
-        setSavedStates(data.states || []);
+      const { success, data } = await apiService.get('/api/fork/save-state');
+      if (success) {
+        setSavedStates((data as any) || []);
       }
     } catch (err) {
       console.error('获取保存的状态列表失败:', err);
@@ -114,13 +114,8 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/fork/save-state?stateName=${encodeURIComponent(stateName)}`, {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await apiService.delete(`/api/fork/save-state?stateName=${encodeURIComponent(stateName)}`);
+      if (success) {
         console.log(`✅ 状态 "${stateName}" 已删除`);
         // 如果删除的是当前选中的状态，清空选择
         if (selectedState === stateName) {
@@ -129,7 +124,7 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
         // 刷新列表
         await fetchSavedStates();
       } else {
-        setError(data.error || '删除失败');
+        setError(error || '删除失败');
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '删除失败';
@@ -145,8 +140,9 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
     const chainInfo = chains.find((c) => c.key === chainKey);
     if (chainInfo) {
       // 优先使用该网络的第一个RPC节点，如果没有则使用默认RPC
-      const rpcUrl = chainInfo.nodes && chainInfo.nodes.length > 0 
-        ? chainInfo.nodes[0].rpcUrl 
+      const firstNode = chainInfo.nodes && chainInfo.nodes.length > 0 ? chainInfo.nodes[0] : undefined;
+      const rpcUrl = firstNode
+        ? (firstNode as any).rpcUrl || (firstNode as any).rpc_url || chainInfo.rpcUrl
         : chainInfo.rpcUrl;
       setSelectedRpcUrl(rpcUrl);
     }
@@ -155,23 +151,28 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
   const fetchConfig = async () => {
     try {
       // 先检测实际的Anvil是否运行
-      const statusResponse = await fetch('/api/fork/status');
-      const statusData = await statusResponse.json();
+      const { success: sSucc, data: sData } = await apiService.get('/api/fork/status', { cache: 'no-store', retry: 1 });
+      const statusData = sData as any;
 
       // 不管是否运行，都获取可用网络列表
-      const configResponse = await fetch('/api/fork/config');
-      const configData = await configResponse.json();
+      const { success: cSucc, data: cData } = await apiService.get('/api/fork/config', { cache: 'no-store', retry: 1 });
+      const configData = cData as any;
       
-      if (configData.success) {
-        setChains(configData.chains);
-        // 第一次加载时，默认设置选中Chain的第一个RPC节点
-        if (!selectedRpcUrl && configData.chains.length > 0) {
-          const defaultChain = configData.chains.find((c: Chain) => c.key === selectedChain) || configData.chains[0];
-          if (defaultChain?.nodes && defaultChain.nodes.length > 0) {
-            setSelectedRpcUrl(defaultChain.nodes[0].rpcUrl);
-          } else {
-            setSelectedRpcUrl(defaultChain.rpcUrl);
-          }
+      if (cSucc && Array.isArray(configData?.chains)) {
+        const chainsData: Chain[] = configData.chains;
+        setChains(chainsData);
+
+        // 保证 selectedChain、selectedRpcUrl 与最新的链/节点一致
+        const desiredChain = chainsData.find((c) => c.key === selectedChain) || chainsData[0];
+        if (desiredChain) {
+          const nextChainKey = desiredChain.key;
+          const nextRpc = desiredChain.nodes && desiredChain.nodes.length > 0 ? desiredChain.nodes[0].rpcUrl : desiredChain.rpcUrl;
+          setSelectedChain(nextChainKey);
+          setSelectedRpcUrl(nextRpc);
+        } else {
+          // 无可用链，清空选择
+          setSelectedChain('');
+          setSelectedRpcUrl('');
         }
       }
 
@@ -221,17 +222,8 @@ export default function ForkNetworkConfig({ onForkSuccess, onForkStateChange, is
         loadState: loadFromState ? selectedState : null, // 传递状态名，让后端知道是否需要加载
       };
 
-      const response = await fetch('/api/fork/start', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-
-      if (data.success && data.command) {
+      const { success, data, error } = await apiService.post('/api/fork/start', requestBody);
+      if (success && (data as any)?.command) {
         // 显示启动命令
         if (loadFromState) {
           // 从状态加载的特殊说明
@@ -254,15 +246,15 @@ ${data.command}
 
 执行完后，Fork网络会自动检测并显示在上方`);
         }
-      } else if (data.success) {
-        // 立即刷新状态
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        await fetchConfig();
-        setIsForking(true);
-        onForkSuccess?.(data.config);
-      } else {
-        setError(data.error || 'Fork启动失败');
-      }
+        } else if (success) {
+          // 立即刷新状态
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          await fetchConfig();
+          setIsForking(true);
+          onForkSuccess?.((data as any).config);
+        } else {
+          setError(error || 'Fork启动失败');
+        }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Fork启动失败';
       setError(errorMsg);
@@ -281,13 +273,11 @@ ${data.command}
     setError('');
 
     try {
-      const response = await fetch(`/api/fork/latest-block?chainKey=${selectedChain}`);
-      const data = await response.json();
-
-      if (data.success) {
-        setBlockNumber(data.blockNumber.toString());
+      const { success, data, error } = await apiService.get(`/api/fork/latest-block?chainKey=${selectedChain}`);
+      if (success) {
+        setBlockNumber((data as any).blockNumber.toString());
       } else {
-        setError(`获取最新区块号失败: ${data.error}`);
+        setError(`获取最新区块号失败: ${error || ''}`);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '获取最新区块号失败';
@@ -307,21 +297,14 @@ ${data.command}
     setError('');
 
     try {
-      const response = await fetch('/api/fork/load-state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stateName: selectedState }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await apiService.post('/api/fork/load-state', { stateName: selectedState });
+      if (success) {
         setError('✅ 状态加载成功！网络已恢复到保存时的状态。');
         // 刷新配置
         await new Promise(resolve => setTimeout(resolve, 1000));
         await fetchConfig();
       } else {
-        setError(data.error || '加载状态失败');
+        setError(error || '加载状态失败');
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '加载状态失败';
@@ -336,20 +319,16 @@ ${data.command}
     setError('');
 
     try {
-      const response = await fetch('/api/fork/stop', {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
+      const { success, data, error } = await apiService.delete('/api/fork/stop');
       console.log('停止Fork响应:', data);
 
-      if (data.success) {
+      if (success) {
         // 显示停止命令提示
-        if (data.command) {
+        if ((data as any)?.command) {
           setError(`
 请在宿主机执行以下命令停止Anvil:
 
-${data.command}
+${(data as any).command}
 
 执行完后，Fork网络会自动检测并更新`);
         }
@@ -361,7 +340,7 @@ ${data.command}
         // 清空区块号，以便下一次可以输入新的区块号
         setBlockNumber('');
       } else {
-        setError(data.error || '停止Fork失败');
+        setError(error || '停止Fork失败');
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '停止Fork失败';
@@ -377,12 +356,11 @@ ${data.command}
     try {
       setTimeLoading(true);
       setTimeMessage('');
-      const res = await fetch('/api/fork/time');
-      const data = await res.json();
-      if (data.success) {
-        setCurrentForkTime(data.data);
+      const { success, data, error } = await apiService.get('/api/fork/time');
+      if (success) {
+        setCurrentForkTime((data as any));
       } else {
-        setTimeMessage(data.error || '获取当前时间失败');
+        setTimeMessage(error || '获取当前时间失败');
       }
     } catch (e: any) {
       setTimeMessage(e?.message || '获取当前时间失败');
@@ -396,17 +374,12 @@ ${data.command}
     try {
       setTimeLoading(true);
       setTimeMessage('');
-      const res = await fetch('/api/fork/time', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setCurrentForkTime(data.data);
+      const { success, data, error } = await apiService.post('/api/fork/time', payload);
+      if (success) {
+        setCurrentForkTime((data as any));
         setTimeMessage('✅ 操作成功');
       } else {
-        setTimeMessage(data.error || '操作失败');
+        setTimeMessage(error || '操作失败');
       }
     } catch (e: any) {
       setTimeMessage(e?.message || '操作失败');
@@ -720,9 +693,9 @@ ${data.command}
             >
               {selectedChainInfo ? (
                 selectedChainInfo.nodes && selectedChainInfo.nodes.length > 0 ? (
-                  selectedChainInfo.nodes.map((node, index) => (
-                    <option key={index} value={node.rpcUrl}>
-                      {node.nodeName}
+                  selectedChainInfo.nodes.map((node: any, index: number) => (
+                    <option key={index} value={node.rpcUrl || node.rpc_url}>
+                      {node.nodeName || node.node_name || 'RPC节点'}
                     </option>
                   ))
                 ) : (

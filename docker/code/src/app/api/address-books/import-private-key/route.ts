@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { Wallet } from 'ethers';
 import pool from '@/lib/db';
+import { ok, fail } from '@/lib/serverUtils';
 
 /**
  * POST /api/address-books/import-private-key
@@ -11,23 +12,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { privateKey, accountName } = body;
 
-    if (!privateKey || !accountName) {
-      return NextResponse.json(
-        { success: false, error: '私钥和账号名称不能为空' },
-        { status: 400 }
-      );
-    }
+    if (!privateKey || !accountName) { return fail('私钥和账号名称不能为空', 400); }
 
     // 验证和恢复钱包
     let wallet: Wallet;
-    try {
-      wallet = new Wallet(privateKey);
-    } catch (err) {
-      return NextResponse.json(
-        { success: false, error: '无效的私钥格式' },
-        { status: 400 }
-      );
-    }
+    try { wallet = new Wallet(privateKey); } catch (err) { return fail('无效的私钥格式', 400); }
 
     const address = wallet.address;
 
@@ -39,12 +28,7 @@ export async function POST(request: NextRequest) {
         [address]
       );
 
-      if (existingRows && existingRows.length > 0) {
-        return NextResponse.json(
-          { success: false, error: '该钱包地址已经被导入' },
-          { status: 400 }
-        );
-      }
+      if (existingRows && existingRows.length > 0) { return fail('该钱包地址已经被导入', 400); }
 
       // 插入主账号
       const [result]: any = await connection.execute(
@@ -52,22 +36,12 @@ export async function POST(request: NextRequest) {
         [accountName, address, address, privateKey, null]
       );
 
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: result.insertId,
-          address,
-          accountName,
-        },
-      });
+      return ok({ id: result.insertId, address, accountName });
     } finally {
       connection.release();
     }
   } catch (error) {
     console.error('导入私钥失败:', error);
-    return NextResponse.json(
-      { success: false, error: '导入私钥失败' },
-      { status: 500 }
-    );
+    return fail('导入私钥失败', 500);
   }
 }

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createPublicClient, http, Hex } from 'viem';
 import { formatBalance } from '@/lib/utils';
+import { getRpcUrl, ok, fail, parseBlockchainError } from '@/lib/serverUtils';
 
 /**
  * GET /api/account-assets/[address]
@@ -14,14 +15,11 @@ export async function GET(
     const { address: addressParam } = await params;
 
     if (!addressParam || !addressParam.match(/^0x[a-fA-F0-9]{40}$/)) {
-      return NextResponse.json(
-        { success: false, error: '无效的以太坊地址' },
-        { status: 400 }
-      );
+      return fail('无效的以太坊地址', 400);
     }
 
     // 直接连接到Fork网络的RPC
-    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
+    const rpcUrl = getRpcUrl('fork');
     const publicClient = createPublicClient({
       transport: http(rpcUrl),
     });
@@ -52,16 +50,9 @@ export async function GET(
       }
     ];
 
-    return NextResponse.json({
-      success: true,
-      data: assets,
-      message: '获取Fork网络资产信息成功',
-    });
+    return ok({ data: assets, message: '获取Fork网络资产信息成功' });
   } catch (error) {
     console.error('获取账户资产失败:', error);
-    return NextResponse.json(
-      { success: false, error: '获取账户资产失败' },
-      { status: 500 }
-    );
+    return fail(parseBlockchainError(error), 500);
   }
 }

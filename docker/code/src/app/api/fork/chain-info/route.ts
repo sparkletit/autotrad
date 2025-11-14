@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createPublicClient, http } from 'viem';
+import { getRpcUrl, ok, fail } from '@/lib/serverUtils';
 
 /**
  * GET /api/fork/chain-info?network=fork
@@ -10,25 +11,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const network = searchParams.get('network') || 'fork';
 
-    // 网络RPC映射
-    const networkConfig: { [key: string]: { rpc: string; chainId?: number } } = {
-      fork: { rpc: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545' },
-      ethereum: { rpc: 'https://mainnet.infura.io/v3/YOUR_KEY', chainId: 1 },
-      bsc: { rpc: 'https://bsc-dataseed1.bnbchain.org', chainId: 56 },
-      polygon: { rpc: 'https://polygon-rpc.com', chainId: 137 },
-    };
+    const rpc = getRpcUrl(network);
 
-    const config = networkConfig[network];
-    if (!config) {
-      return NextResponse.json(
-        { success: false, error: '不支持的网络' },
-        { status: 400 }
-      );
-    }
-
-    const publicClient = createPublicClient({
-      transport: http(config.rpc),
-    });
+    const publicClient = createPublicClient({ transport: http(rpc) });
 
     // 获取当前区块号
     const blockNumber = await publicClient.getBlockNumber();
@@ -47,20 +32,9 @@ export async function GET(request: NextRequest) {
 
     const chainName = chainNameMap[chainId] || `Unknown (${chainId})`;
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        chainId,
-        chainName,
-        blockNumber: blockNumber.toString(),
-        network,
-      },
-    });
+    return ok({ chainId, chainName, blockNumber: blockNumber.toString(), network });
   } catch (error) {
     console.error('获取链信息失败:', error);
-    return NextResponse.json(
-      { success: false, error: '获取链信息失败' },
-      { status: 500 }
-    );
+    return fail('获取链信息失败', 500);
   }
 }

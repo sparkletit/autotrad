@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, getAddress } from 'viem';
+import { getRpcUrl } from '@/lib/serverUtils';
 import { bsc } from 'viem/chains';
 import { Hex } from 'viem';
 
-const getRpcUrl = (network: string): string => {
-  const rpcUrls: Record<string, string> = {
-    fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
-    ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
-    bsc: 'https://bsc-dataseed1.bnbchain.org',
-    polygon: 'https://polygon-rpc.com',
-  };
-  return rpcUrls[network] || rpcUrls.fork;
-};
 
 // PancakeSwap V2 Factory 地址（BSC 主网）- 使用小写避免校验失败
 const FACTORY_ADDRESS = '0xca143ce32fe78f1f7019d7d551a6402fc5350c73';

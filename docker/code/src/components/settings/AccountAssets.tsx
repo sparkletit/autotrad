@@ -28,13 +28,12 @@ export default function AccountAssets({ address }: AccountAssetsProps) {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`/api/account-assets/${address}`);
-      const data = await response.json();
+      const { success, data, error } = await apiService.get(`/api/account-assets/${address}`);
 
-      if (data.success) {
-        setAssets(data.data || []);
+      if (success) {
+        setAssets((data as any) || []);
       } else {
-        setError(data.error || '获取资产信息失败');
+        setError(error || '获取资产信息失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取资产信息失败');
@@ -127,3 +126,4 @@ export default function AccountAssets({ address }: AccountAssetsProps) {
     </div>
   );
 }
+import apiService from '@/lib/apiService';

@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import apiService from '@/lib/apiService';
+import { useNetwork, setNetwork } from '@/lib/networkStore';
 
 interface HeaderProps {
   title?: string;
@@ -24,6 +25,8 @@ const Header: React.FC<HeaderProps> = ({ title = "Web3 交易平台" }) => {
       console.log('[API Config] Base URL:', apiBaseUrl);
     }
   }, [isClient]);
+  const net = useNetwork();
+
   return (
     <header className="bg-white border-b border-gray-300 sticky top-0 z-50">
       <div className="px-8 py-4 flex justify-between items-center">
@@ -56,8 +59,18 @@ const Header: React.FC<HeaderProps> = ({ title = "Web3 交易平台" }) => {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full border border-green-300">
             <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-            <span className="text-green-700 font-medium text-xs">已连接</span>
+            <span className="text-green-700 font-medium text-xs">已连接 ({net})</span>
           </div>
+          <select
+            value={net}
+            onChange={(e) => setNetwork(e.target.value as any)}
+            className="px-3 py-2 border border-gray-300 rounded text-sm text-gray-900"
+          >
+            <option value="fork">Fork (本地)</option>
+            <option value="bsc">BSC</option>
+            <option value="ethereum">Ethereum</option>
+            <option value="polygon">Polygon</option>
+          </select>
           <button className="w-9 h-9 bg-gray-400 rounded-full flex items-center justify-center hover:bg-gray-500 transition-colors">
             <span className="text-lg">👤</span>
           </button>

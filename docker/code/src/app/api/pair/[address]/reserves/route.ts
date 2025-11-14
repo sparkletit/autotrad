@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
 import { bsc } from 'viem/chains';
 import { Hex, getAddress } from 'viem';
+import { getRpcUrlOr } from '@/lib/serverUtils';
 
 // 强制在 Node.js 运行时执行，避免 Edge 环境下的兼容性问题
 export const runtime = 'nodejs';
@@ -12,17 +13,8 @@ const RPC_URLS = [
   'https://bsc.publicnode.com',
 ];
 
-// 与其他路由保持一致的 RPC 选择逻辑
-const getRpcUrl = (network: string): string => {
-  const rpcUrls: Record<string, string> = {
-    fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
-    ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
-    bsc: 'https://bsc-dataseed1.bnbchain.org',
-    polygon: 'https://polygon-rpc.com',
-  };
-  // 对于未知网络，保持该路由的原始语义（默认 bsc）
-  return rpcUrls[network] || rpcUrls.bsc;
-};
+// 使用通用方法，但保持该路由的原始语义（未知网络回退 bsc）
+const getRpcUrl = (network: string): string => getRpcUrlOr(network, 'https://bsc-dataseed1.bnbchain.org');
 
 const PAIR_ABI = [
   {

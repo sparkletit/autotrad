@@ -20,11 +20,9 @@ export default function AddressBooksClient() {
   const fetchMainAccounts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/address-books/main-accounts');
-      const data = await response.json();
-      
-      if (data.success) {
-        setMainAccounts(data.data);
+      const { success, data } = await listMainAccounts();
+      if (success) {
+        setMainAccounts((data as any) || []);
       }
     } catch (error) {
       console.error('获取账号列表失败:', error);
@@ -86,3 +84,4 @@ export default function AddressBooksClient() {
     </div>
   );
 }
+import { listMainAccounts } from '@/lib/addressBooksService';

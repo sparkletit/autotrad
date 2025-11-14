@@ -5,6 +5,8 @@
  */
 
 import pool from './db';
+import { NextResponse } from 'next/server';
+import { http } from 'viem';
 
 /**
  * 从数据库获取账户的私钥
@@ -144,3 +146,55 @@ export function parseBlockchainError(error: any): string {
   return `❌ 交易失败: ${errorMessage}`;
 }
 
+export function getRpcUrl(network: string): string {
+  const rpcUrls: Record<string, string> = {
+    fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
+    ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
+    bsc: 'https://bsc-dataseed1.bnbchain.org',
+    polygon: 'https://polygon-rpc.com',
+  };
+  const key = (network || 'fork').toLowerCase();
+  return rpcUrls[key] || rpcUrls.fork;
+}
+
+export function getRpcUrlOr(network: string, fallback: string): string {
+  try {
+    const url = getRpcUrl(network);
+    return url || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function createHttpTransport(rpcUrl: string, opts?: { timeout?: number; retryCount?: number; retryDelay?: number }) {
+  const { timeout = 0, retryCount = 3, retryDelay = 1000 } = opts || {};
+  return http(rpcUrl, { timeout, retryCount, retryDelay });
+}
+
+export function ok(data: any, init?: ResponseInit) {
+  return NextResponse.json({ success: true, data }, init);
+}
+
+export function fail(error: any, status = 400, extra?: Record<string, any>, init?: ResponseInit) {
+  const message = typeof error === 'string' ? error : error?.message || String(error);
+  return NextResponse.json({ success: false, error: message, ...(extra || {}) }, { status, ...(init || {}) });
+}
+
+export async function serverFetch(url: string, init?: RequestInit, timeoutMs = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...(init || {}), signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function rpcCall<T = any>(rpcUrl: string, method: string, params: any[] = [], timeoutMs = 10000): Promise<T> {
+  const body = JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params });
+  const res = await serverFetch(rpcUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, timeoutMs);
+  const json = await res.json();
+  if (json?.error) throw new Error(json.error.message || 'JSON-RPC Error');
+  return json?.result as T;
+}

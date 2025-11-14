@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import mysql from 'mysql2/promise';
+import { ok, fail } from '@/lib/serverUtils';
 
 const dbConfig = {
   host: process.env.MYSQL_HOST || 'mysql',
@@ -22,16 +23,10 @@ export async function GET(request: NextRequest) {
 
     await connection.end();
 
-    return NextResponse.json({
-      success: true,
-      data: rows,
-    });
+    return ok(rows);
   } catch (error) {
     console.error('获取RPC节点列表失败:', error);
-    return NextResponse.json(
-      { success: false, error: '获取RPC节点列表失败' },
-      { status: 500 }
-    );
+    return fail('获取RPC节点列表失败', 500);
   }
 }
 
@@ -44,12 +39,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { chain_key, chain_name, chain_id, node_name, rpc_url } = body;
 
-    if (!chain_key || !chain_name || chain_id === undefined || !node_name || !rpc_url) {
-      return NextResponse.json(
-        { success: false, error: '缺少必要参数' },
-        { status: 400 }
-      );
-    }
+    if (!chain_key || !chain_name || chain_id === undefined || !node_name || !rpc_url) { return fail('缺少必要参数', 400); }
 
     const connection = await mysql.createConnection(dbConfig);
 
@@ -59,13 +49,7 @@ export async function POST(request: NextRequest) {
       [chain_key, rpc_url]
     );
 
-    if ((existingRows as any[]).length > 0) {
-      await connection.end();
-      return NextResponse.json(
-        { success: false, error: '该RPC URL已存在' },
-        { status: 400 }
-      );
-    }
+    if ((existingRows as any[]).length > 0) { await connection.end(); return fail('该RPC URL已存在', 400); }
 
     // 插入新节点
     const [result] = await connection.execute(
@@ -75,8 +59,7 @@ export async function POST(request: NextRequest) {
 
     await connection.end();
 
-    return NextResponse.json({
-      success: true,
+    return ok({
       message: 'RPC节点添加成功',
       data: {
         id: (result as any).insertId,
@@ -91,9 +74,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('添加RPC节点失败:', error);
-    return NextResponse.json(
-      { success: false, error: '添加RPC节点失败' },
-      { status: 500 }
-    );
+    return fail('添加RPC节点失败', 500);
   }
 }

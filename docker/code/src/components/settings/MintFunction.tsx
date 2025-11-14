@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import apiService from '@/lib/apiService';
 
 interface Token {
   symbol: string;
@@ -36,20 +37,14 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
   useEffect(() => {
     const checkForkStatus = async () => {
       try {
-        // 使用与 ForkNetworkConfig 相同的检查方法：直接检测 RPC 是否响应
-        const statusResponse = await fetch('/api/fork/status');
-        const statusData = await statusResponse.json();
-        //console.log('Fork status check result:', statusData);
-        if (statusData.success) {
-          setRealForkStatus(statusData.isRunning || false);
+        const { success: sSucc, data: sData } = await apiService.get('/api/fork/status', { cache: 'no-store', retry: 1 });
+        if (sSucc) {
+          const payload = sData as any;
+          setRealForkStatus(!!payload?.isRunning);
         }
-        
-        // 同时获取Fork配置信息
-        const configResponse = await fetch('/api/fork/config');
-        const configData = await configResponse.json();
-        if (configData.success) {
-          setForkConfig(configData);
-        }
+
+        const { success: cSucc, data: cData } = await apiService.get('/api/fork/config', { cache: 'no-store', retry: 1 });
+        if (cSucc) setForkConfig(cData as any);
       } catch (err) {
         console.error('检查Fork状态失败:', err);
         setRealForkStatus(false);
@@ -75,16 +70,16 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
   const fetchTokensAndBalance = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/fork/mint?address=${selectedAddress}`);
-      const data = await response.json();
+      const { success, data, error } = await apiService.get(`/api/fork/mint?address=${selectedAddress}`);
 
-      if (data.success) {
-        setSupportedTokens(data.supportedTokens);
-        if (data.balances) {
-          setBalances(data.balances);
+      if (success) {
+        const payload = data as any;
+        setSupportedTokens(payload.supportedTokens || []);
+        if (payload.balances) {
+          setBalances(payload.balances);
         }
-      } else if (data.error) {
-        setError(data.error);
+      } else if (error) {
+        setError(error);
       }
     } catch (err) {
       console.error('获取代币信息失败:', err);
@@ -115,27 +110,14 @@ export default function MintFunction({ selectedAddress, isForkActive }: MintFunc
     setSuccess('');
 
     try {
-      const response = await fetch('/api/fork/mint', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          address: selectedAddress,
-          amount: mintAmount,
-          token: selectedToken,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await apiService.post('/api/fork/mint', { address: selectedAddress, amount: mintAmount, token: selectedToken });
+      if (success) {
         setSuccess(`成功Mint ${mintAmount} ${selectedToken}！`);
         setMintAmount('');
         // 刷新余额
         await fetchTokensAndBalance();
       } else {
-        setError(data.error || 'Mint失败');
+        setError(error || 'Mint失败');
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Mint失败';

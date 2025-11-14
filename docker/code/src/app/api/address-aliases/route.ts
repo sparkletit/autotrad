@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import mysql from 'mysql2/promise';
+import { ok, fail } from '@/lib/serverUtils';
 
 const dbConfig = {
   host: 'mysql',
@@ -22,17 +23,11 @@ export async function GET(request: NextRequest) {
     );
     await connection.end();
 
-    return NextResponse.json({
-      success: true,
-      data: rows,
-    });
+    return ok(rows);
   } catch (error) {
     console.error('获取交易池地址失败:', error);
     if (connection) await connection.end();
-    return NextResponse.json(
-      { success: false, error: '获取交易池地址失败' },
-      { status: 500 }
-    );
+    return fail('获取交易池地址失败', 500);
   }
 }
 
@@ -46,12 +41,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { alias, address, network, type } = body;
 
-    if (!alias || !address || !network || !type) {
-      return NextResponse.json(
-        { success: false, error: '缺少必要参数' },
-        { status: 400 }
-      );
-    }
+    if (!alias || !address || !network || !type) { return fail('缺少必要参数', 400); }
 
     connection = await mysql.createConnection(dbConfig);
 
@@ -61,13 +51,7 @@ export async function POST(request: NextRequest) {
       [alias, address]
     );
 
-    if ((existing as any[]).length > 0) {
-      await connection.end();
-      return NextResponse.json(
-        { success: false, error: '该别名或地址已存在' },
-        { status: 400 }
-      );
-    }
+    if ((existing as any[]).length > 0) { await connection.end(); return fail('该别名或地址已存在', 400); }
 
     // 插入新别名
     const [result] = await connection.execute(
@@ -77,17 +61,10 @@ export async function POST(request: NextRequest) {
 
     await connection.end();
 
-    return NextResponse.json({
-      success: true,
-      message: '交易池地址添加成功',
-      id: (result as any).insertId,
-    });
+    return ok({ message: '交易池地址添加成功', id: (result as any).insertId });
   } catch (error) {
     console.error('添加交易池地址失败:', error);
     if (connection) await connection.end();
-    return NextResponse.json(
-      { success: false, error: '添加交易池地址失败' },
-      { status: 500 }
-    );
+    return fail('添加交易池地址失败', 500);
   }
 }

@@ -1,22 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { ok, fail, rpcCall, getRpcUrl } from '@/lib/serverUtils';
 
 export const runtime = 'nodejs';
 
-const ANVIL_RPC_URL = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
-
-async function callRpc(method: string, params: any[] = [], id = 1) {
-  const res = await fetch(ANVIL_RPC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', method, params, id }),
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error.message || 'RPC调用失败');
-  return data.result;
-}
+const ANVIL_RPC_URL = getRpcUrl('fork');
 
 async function getLatestBlock() {
-  const block = await callRpc('eth_getBlockByNumber', ['latest', false]);
+  const block = await rpcCall(ANVIL_RPC_URL, 'eth_getBlockByNumber', ['latest', false]);
   const numberHex = block?.number ?? '0x0';
   const tsHex = block?.timestamp ?? '0x0';
   const blockNumber = parseInt(numberHex, 16);
@@ -31,12 +21,9 @@ async function getLatestBlock() {
 export async function GET() {
   try {
     const { blockNumber, timestamp } = await getLatestBlock();
-    return NextResponse.json({ success: true, data: { blockNumber, timestamp } });
+    return ok({ blockNumber, timestamp });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error?.message || '获取时间失败' },
-      { status: 500 }
-    );
+    return fail(error?.message || '获取时间失败', 500);
   }
 }
 
@@ -72,18 +59,9 @@ export async function POST(request: NextRequest) {
         );
       }
       // 兼容性处理：优先尝试 anvil_setBlockTimestampInterval，其次 evm_increaseTime
-      try {
-        await callRpc('evm_increaseTime', [seconds]);
-      } catch (e) {
-        // 忽略，部分实现可能不支持
-      }
+      try { await rpcCall(ANVIL_RPC_URL, 'evm_increaseTime', [seconds]); } catch (e) {}
       // 出块使时间生效
-      try {
-        await callRpc('anvil_mine', [blocks]);
-      } catch (e) {
-        // 回退使用 evm_mine
-        await callRpc('evm_mine', []);
-      }
+      try { await rpcCall(ANVIL_RPC_URL, 'anvil_mine', [blocks]); } catch (e) { await rpcCall(ANVIL_RPC_URL, 'evm_mine', []); }
     } else if (action === 'set') {
       if (!timestamp || !Number.isFinite(timestamp) || timestamp <= 0) {
         return NextResponse.json(
@@ -92,13 +70,9 @@ export async function POST(request: NextRequest) {
         );
       }
       // 设置下一个区块的时间戳
-      await callRpc('evm_setNextBlockTimestamp', [timestamp]);
+      await rpcCall(ANVIL_RPC_URL, 'evm_setNextBlockTimestamp', [timestamp]);
       // 出块使时间生效
-      try {
-        await callRpc('anvil_mine', [blocks]);
-      } catch (e) {
-        await callRpc('evm_mine', []);
-      }
+      try { await rpcCall(ANVIL_RPC_URL, 'anvil_mine', [blocks]); } catch (e) { await rpcCall(ANVIL_RPC_URL, 'evm_mine', []); }
     } else if (action === 'mine') {
       if (!blocks || !Number.isFinite(blocks) || blocks <= 0) {
         return NextResponse.json(
@@ -106,14 +80,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      try {
-        await callRpc('anvil_mine', [blocks]);
-      } catch (e) {
-        // 回退到逐块挖矿
-        for (let i = 0; i < blocks; i++) {
-          await callRpc('evm_mine', []);
-        }
-      }
+      try { await rpcCall(ANVIL_RPC_URL, 'anvil_mine', [blocks]); } catch (e) { for (let i = 0; i < blocks; i++) { await rpcCall(ANVIL_RPC_URL, 'evm_mine', []); } }
     } else if (action === 'interval') {
       if (!seconds || !Number.isFinite(seconds) || seconds < 0) {
         return NextResponse.json(
@@ -122,7 +89,7 @@ export async function POST(request: NextRequest) {
         );
       }
       // 设置自动出块时间间隔（0 表示关闭自动定时出块）
-      await callRpc('anvil_setBlockTimestampInterval', [seconds]);
+      await rpcCall(ANVIL_RPC_URL, 'anvil_setBlockTimestampInterval', [seconds]);
     } else if (action === 'reach') {
       if (!timestamp || !Number.isFinite(timestamp) || timestamp <= 0) {
         return NextResponse.json(
@@ -136,20 +103,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, data: latest });
       }
       // 设置下一个区块的时间戳为目标值，然后出块使其生效
-      await callRpc('evm_setNextBlockTimestamp', [timestamp]);
-      try {
-        await callRpc('anvil_mine', [1]);
-      } catch (e) {
-        await callRpc('evm_mine', []);
-      }
+      await rpcCall(ANVIL_RPC_URL, 'evm_setNextBlockTimestamp', [timestamp]);
+      try { await rpcCall(ANVIL_RPC_URL, 'anvil_mine', [1]); } catch (e) { await rpcCall(ANVIL_RPC_URL, 'evm_mine', []); }
     }
 
     const latest = await getLatestBlock();
-    return NextResponse.json({ success: true, data: latest });
+    return ok(latest);
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error?.message || '时间推进失败' },
-      { status: 500 }
-    );
+    return fail(error?.message || '时间推进失败', 500);
   }
 }

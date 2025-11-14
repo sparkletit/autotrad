@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import mysql from 'mysql2/promise';
+import { ok, fail } from '@/lib/serverUtils';
 
 const dbConfig = {
   host: process.env.MYSQL_HOST || 'mysql',
@@ -35,15 +36,9 @@ export async function GET(request: NextRequest) {
     const [rows] = await connection.execute(sql, params);
     await connection.end();
 
-    return NextResponse.json({
-      success: true,
-      data: rows,
-    });
+    return ok(rows);
   } catch (error) {
     console.error('搜索地址别名失败:', error);
-    return NextResponse.json(
-      { success: false, error: '搜索地址别名失败' },
-      { status: 500 }
-    );
+    return fail('搜索地址别名失败', 500);
   }
 }

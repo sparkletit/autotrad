@@ -14,6 +14,8 @@ interface ApiRequestOptions {
   body?: any;
   headers?: Record<string, string>;
   timeout?: number;
+  retry?: number;
+  cache?: 'no-store' | 'reload' | 'force-cache' | 'only-if-cached';
 }
 
 class ApiService {
@@ -28,53 +30,54 @@ class ApiService {
   async request<T = any>(url: string, options: ApiRequestOptions = {}): Promise<ApiResponse<T>> {
     const finalUrl = `${this.baseURL}${url}`;
     const defaultTimeout = 30000;
+    const retries = typeof options.retry === 'number' ? options.retry : 0;
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), options.timeout || defaultTimeout);
+    const attempt = async (): Promise<ApiResponse<T>> => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), options.timeout || defaultTimeout);
 
-      const response = await fetch(finalUrl, {
-        method: options.method || 'GET',
-        headers: {
-          ...this.globalHeaders,
-          ...options.headers,
-        },
-        ...(options.body && { body: JSON.stringify(options.body) }),
-        signal: controller.signal,
-      });
+        const response = await fetch(finalUrl, {
+          method: options.method || 'GET',
+          headers: {
+            ...this.globalHeaders,
+            ...options.headers,
+          },
+          ...(options.body && { body: JSON.stringify(options.body) }),
+          ...(options.cache && { cache: options.cache }),
+          signal: controller.signal,
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        console.error(`API Error [${response.status}]:`, data);
-        return {
-          success: false,
-          error: data.error || `HTTP ${response.status}`,
-        };
+        if (!response.ok) {
+          console.error(`API Error [${response.status}]:`, data);
+          return { success: false, error: data.error || `HTTP ${response.status}` };
+        }
+
+        return { success: data.success ?? true, data: (data && typeof data === 'object' ? (data as any).data ?? data : data), error: (data as any)?.error };
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error
+            ? err.name === 'AbortError'
+              ? 'Request timeout'
+              : err.message
+            : 'Network error';
+        console.error('API Request Error:', errorMessage);
+        return { success: false, error: errorMessage };
       }
+    };
 
-      return {
-        success: data.success ?? true,
-        data: data.data,
-        error: data.error,
-      };
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error
-          ? err.name === 'AbortError'
-            ? 'Request timeout'
-            : err.message
-          : 'Network error';
-
-      console.error('API Request Error:', errorMessage);
-
-      return {
-        success: false,
-        error: errorMessage,
-      };
+    let lastResult: ApiResponse<T> = await attempt();
+    let remaining = retries;
+    while (!lastResult.success && remaining > 0) {
+      await new Promise((r) => setTimeout(r, 500));
+      lastResult = await attempt();
+      remaining--;
     }
+    return lastResult;
   }
 
   /**

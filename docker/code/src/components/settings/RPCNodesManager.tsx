@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import apiService from '@/lib/apiService';
+import { listRpcNodes, addRpcNode, updateRpcNode, deleteRpcNode, pingRpcNode } from '@/lib/rpcNodesService';
 
 interface RPCNode {
   id: number;
@@ -48,16 +50,14 @@ export default function RPCNodesManager() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/rpc-nodes');
-      const data = await response.json();
-
-      if (data.success) {
-        setNodes(data.data);
+      const { success, data, error } = await listRpcNodes();
+      if (success) {
+        setNodes((data as any) || []);
         // 按网络分组
-        const grouped = groupNodesByChain(data.data);
+        const grouped = groupNodesByChain((data as any) || []);
         setGroupedNodes(grouped);
       } else {
-        setError(data.error || '获取RPC节点失败');
+        setError(error || '获取RPC节点失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取RPC节点失败');
@@ -98,15 +98,8 @@ export default function RPCNodesManager() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/rpc-nodes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newNode),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await addRpcNode(newNode);
+      if (success) {
         setShowAddForm(false);
         setNewNode({
           chain_key: 'bsc',
@@ -117,7 +110,7 @@ export default function RPCNodesManager() {
         });
         await fetchNodes();
       } else {
-        setError(data.error || '添加RPC节点失败');
+        setError(error || '添加RPC节点失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加RPC节点失败');
@@ -136,24 +129,13 @@ export default function RPCNodesManager() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`/api/rpc-nodes/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          node_name: editingNode.node_name,
-          rpc_url: editingNode.rpc_url,
-          is_active: editingNode.is_active,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await updateRpcNode(id, { node_name: editingNode.node_name!, rpc_url: editingNode.rpc_url!, is_active: !!editingNode.is_active });
+      if (success) {
         setEditingId(null);
         setEditingNode(null);
         await fetchNodes();
       } else {
-        setError(data.error || '编辑RPC节点失败');
+        setError(error || '编辑RPC节点失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '编辑RPC节点失败');
@@ -169,16 +151,11 @@ export default function RPCNodesManager() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`/api/rpc-nodes/${id}`, {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await deleteRpcNode(id);
+      if (success) {
         await fetchNodes();
       } else {
-        setError(data.error || '删除RPC节点失败');
+        setError(error || '删除RPC节点失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除RPC节点失败');
@@ -191,17 +168,13 @@ export default function RPCNodesManager() {
   const handlePingNode = async (id: number) => {
     setPingingId(id);
     try {
-      const response = await fetch(`/api/rpc-nodes/${id}/ping`, {
-        method: 'POST',
-      });
-
-      const data = await response.json();
+      const { success, error } = await pingRpcNode(id);
 
       // 刷新列表以显示更新的PING结果
       await fetchNodes();
 
-      if (!data.success) {
-        setError(`PING失败: ${data.message}`);
+      if (!success) {
+        setError(`PING 失败: ${error || ''}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'PING失败');

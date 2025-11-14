@@ -62,11 +62,9 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
     if (accounts.length > 0) return;
     setLoading(true);
     try {
-      const response = await fetch('/api/address-books/main-accounts');
-      const data = await response.json();
-
-      if (data.success) {
-        const mainAccounts: Account[] = (data.data || []).map((acc: any) => ({
+      const { success, data } = await listMainAccounts();
+      if (success) {
+        const mainAccounts: Account[] = ((data as any) || []).map((acc: any) => ({
           id: acc.id,
           account_name: acc.account_name,
           address: acc.address,
@@ -77,12 +75,9 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
 
         for (const mainAccount of mainAccounts) {
           try {
-            const derivedResponse = await fetch(
-              `/api/address-books/main-accounts/${mainAccount.id}/derived-accounts`
-            );
-            const derivedData = await derivedResponse.json();
-            if (derivedData.success) {
-              const derived = (derivedData.data || []).map((acc: any) => ({
+            const { success: dSucc, data: dData } = await listDerivedAccounts(mainAccount.id);
+            if (dSucc) {
+              const derived = ((dData as any) || []).map((acc: any) => ({
                 id: acc.id,
                 account_name: acc.account_name,
                 address: acc.address,
@@ -109,10 +104,9 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
     if (aliases.length > 0) return;
     setLoading(true);
     try {
-      const response = await fetch('/api/address-aliases/search');
-      const data = await response.json();
-      if (data.success) {
-        setAliases(data.data || []);
+      const { success, data } = await listAliases();
+      if (success) {
+        setAliases(((data as any) || []));
       }
     } catch (err) {
       console.error('获取地址别名失败:', err);
@@ -126,10 +120,9 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
     if (tokens.length > 0) return;
     setLoading(true);
     try {
-      const response = await fetch('/api/custom-tokens');
-      const data = await response.json();
-      if (data.success) {
-        setTokens(data.data || []);
+      const { success, data } = await listTokens();
+      if (success) {
+        setTokens(((data as any) || []));
       }
     } catch (err) {
       console.error('获取代币列表失败:', err);
@@ -477,3 +470,7 @@ const UnifiedAddressSelector: React.FC<UnifiedAddressSelectorProps> = ({
 };
 
 export default UnifiedAddressSelector;
+import apiService from '@/lib/apiService';
+import { listMainAccounts, listDerivedAccounts } from '@/lib/addressBooksService';
+import { listAliases } from '@/lib/addressAliasesService';
+import { listTokens } from '@/lib/tokensService';

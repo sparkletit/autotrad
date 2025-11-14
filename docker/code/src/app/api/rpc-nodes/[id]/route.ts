@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import mysql from 'mysql2/promise';
+import { ok, fail } from '@/lib/serverUtils';
 
 const dbConfig = {
   host: process.env.MYSQL_HOST || 'mysql',
@@ -30,13 +31,7 @@ export async function PUT(
       [id]
     );
 
-    if ((nodeRows as any[]).length === 0) {
-      await connection.end();
-      return NextResponse.json(
-        { success: false, error: 'RPC节点不存在' },
-        { status: 404 }
-      );
-    }
+    if ((nodeRows as any[]).length === 0) { await connection.end(); return fail('RPC节点不存在', 404); }
 
     // 构建更新字段
     const updates = [];
@@ -59,13 +54,7 @@ export async function PUT(
       values.push(is_active);
     }
 
-    if (updates.length === 0) {
-      await connection.end();
-      return NextResponse.json(
-        { success: false, error: '没有要更新的字段' },
-        { status: 400 }
-      );
-    }
+    if (updates.length === 0) { await connection.end(); return fail('没有要更新的字段', 400); }
 
     values.push(id);
     const sql = `UPDATE rpc_nodes SET ${updates.join(', ')} WHERE id = ?`;
@@ -73,16 +62,10 @@ export async function PUT(
     await connection.execute(sql, values);
     await connection.end();
 
-    return NextResponse.json({
-      success: true,
-      message: 'RPC节点更新成功',
-    });
+    return ok({ message: 'RPC节点更新成功' });
   } catch (error) {
     console.error('更新RPC节点失败:', error);
-    return NextResponse.json(
-      { success: false, error: '更新RPC节点失败' },
-      { status: 500 }
-    );
+    return fail('更新RPC节点失败', 500);
   }
 }
 
@@ -106,36 +89,18 @@ export async function DELETE(
       [id]
     );
 
-    if ((nodeRows as any[]).length === 0) {
-      await connection.end();
-      return NextResponse.json(
-        { success: false, error: 'RPC节点不存在' },
-        { status: 404 }
-      );
-    }
+    if ((nodeRows as any[]).length === 0) { await connection.end(); return fail('RPC节点不存在', 404); }
 
     const node = (nodeRows as any[])[0];
-    if (node.is_default) {
-      await connection.end();
-      return NextResponse.json(
-        { success: false, error: '无法删除默认RPC节点' },
-        { status: 400 }
-      );
-    }
+    if (node.is_default) { await connection.end(); return fail('无法删除默认RPC节点', 400); }
 
     // 删除节点
     await connection.execute('DELETE FROM rpc_nodes WHERE id = ?', [id]);
     await connection.end();
 
-    return NextResponse.json({
-      success: true,
-      message: 'RPC节点删除成功',
-    });
+    return ok({ message: 'RPC节点删除成功' });
   } catch (error) {
     console.error('删除RPC节点失败:', error);
-    return NextResponse.json(
-      { success: false, error: '删除RPC节点失败' },
-      { status: 500 }
-    );
+    return fail('删除RPC节点失败', 500);
   }
 }

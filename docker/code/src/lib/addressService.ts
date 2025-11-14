@@ -3,6 +3,7 @@
  * 提供统一的账户、别名、代币数据获取接口
  */
 
+import apiService from './apiService';
 export interface Account {
   id: number;
   account_name: string;
@@ -29,11 +30,10 @@ export interface CustomToken {
  */
 export const fetchAllAccounts = async (): Promise<Account[]> => {
   try {
-    const response = await fetch('/api/address-books/main-accounts');
-    const data = await response.json();
+    const { success, data } = await apiService.get('/api/address-books/main-accounts');
 
-    if (data.success) {
-      const mainAccounts: Account[] = (data.data || []).map((acc: any) => ({
+    if (success) {
+      const mainAccounts: Account[] = ((data as any) || []).map((acc: any) => ({
         id: acc.id,
         account_name: acc.account_name,
         address: acc.address,
@@ -45,12 +45,9 @@ export const fetchAllAccounts = async (): Promise<Account[]> => {
       // 获取派生账号
       for (const mainAccount of mainAccounts) {
         try {
-          const derivedResponse = await fetch(
-            `/api/address-books/main-accounts/${mainAccount.id}/derived-accounts`
-          );
-          const derivedData = await derivedResponse.json();
-          if (derivedData.success) {
-            const derived = (derivedData.data || []).map((acc: any) => ({
+          const { success: dSucc, data: dData } = await apiService.get(`/api/address-books/main-accounts/${mainAccount.id}/derived-accounts`);
+          if (dSucc) {
+            const derived = ((dData as any) || []).map((acc: any) => ({
               id: acc.id,
               account_name: acc.account_name,
               address: acc.address,
@@ -77,11 +74,8 @@ export const fetchAllAccounts = async (): Promise<Account[]> => {
  */
 export const fetchAddressAliases = async (): Promise<AddressAlias[]> => {
   try {
-    const response = await fetch('/api/address-aliases/search');
-    const data = await response.json();
-    if (data.success) {
-      return data.data || [];
-    }
+    const { success, data } = await apiService.get('/api/address-aliases/search');
+    if (success) return (data as any) || [];
     return [];
   } catch (err) {
     console.error('获取地址别名失败:', err);
@@ -94,11 +88,8 @@ export const fetchAddressAliases = async (): Promise<AddressAlias[]> => {
  */
 export const fetchCustomTokens = async (): Promise<CustomToken[]> => {
   try {
-    const response = await fetch('/api/custom-tokens');
-    const data = await response.json();
-    if (data.success) {
-      return data.data || [];
-    }
+    const { success, data } = await apiService.get('/api/custom-tokens');
+    if (success) return (data as any) || [];
     return [];
   } catch (err) {
     console.error('获取自定义代币失败:', err);
@@ -129,11 +120,10 @@ export const fetchTokenBalances = async (
       params.set('tokens', JSON.stringify(payload));
     }
 
-    const response = await fetch(`/api/balance-checker?${params.toString()}`);
-    const data = await response.json();
-    if (data.success) {
-      // /api/balance-checker 返回 { data: { address, balances } }
-      return (data.data && Array.isArray(data.data.balances)) ? data.data.balances : [];
+    const { success, data } = await apiService.get(`/api/balance-checker?${params.toString()}`);
+    if (success) {
+      const payload = data as any;
+      return (payload && Array.isArray(payload.balances)) ? payload.balances : [];
     }
     return [];
   } catch (err) {

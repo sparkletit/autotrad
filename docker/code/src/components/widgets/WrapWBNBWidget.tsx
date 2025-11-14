@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
+import apiService from '@/lib/apiService';
 
 interface WrapWBNBWidgetProps {
   isOpen: boolean;
@@ -37,19 +38,13 @@ const WrapWBNBWidget: React.FC<WrapWBNBWidgetProps> = ({ isOpen, onClose, onSucc
 
     setLoading(true);
     try {
-      const response = await fetch('/api/swap/wrap-wbnb', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account: selectedAddress,
-          amount,
-          network: 'fork',
-        }),
+      const { success, error } = await apiService.post('/api/swap/wrap-wbnb', {
+        account: selectedAddress,
+        amount,
+        network: 'fork',
       });
 
-      const data = await response.json();
-
-      if (data.success) {
+      if (success) {
         setSuccess(`成功将 ${amount} BNB 包装为 WBNB！`);
         setAmount('');
         setSelectedAddress('');
@@ -58,7 +53,7 @@ const WrapWBNBWidget: React.FC<WrapWBNBWidgetProps> = ({ isOpen, onClose, onSucc
           onSuccess?.();
         }, 1500);
       } else {
-        setError(data.error || '包装失败');
+        setError(error || '包装失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '包装失败');

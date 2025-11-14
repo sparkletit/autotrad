@@ -39,13 +39,11 @@ export default function IdentityConfiguration({ onAccountSelected }: IdentityCon
   const fetchMainAccounts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/address-books/main-accounts');
-      const data = await response.json();
-
-      if (data.success) {
-        setMainAccounts(data.data || []);
+      const { success, data, error } = await listMainAccounts();
+      if (success) {
+        setMainAccounts((data as any) || []);
       } else {
-        setError('获取主账号失败: ' + (data.error || '未知错误'));
+        setError('获取主账号失败: ' + (error || '未知错误'));
       }
     } catch (err) {
       console.error('获取主账号失败:', err);
@@ -62,11 +60,9 @@ export default function IdentityConfiguration({ onAccountSelected }: IdentityCon
     setSelectedAccountAddress('');
 
     try {
-      const response = await fetch(`/api/address-books/main-accounts/${mainAccountId}/derived-accounts`);
-      const data = await response.json();
-
-      if (data.success) {
-        setDerivedAccounts(data.data || []);
+      const { success, data } = await listDerivedAccounts(mainAccountId);
+      if (success) {
+        setDerivedAccounts((data as any) || []);
       }
     } catch (err) {
       console.error('获取派生账号失败:', err);
@@ -185,3 +181,4 @@ export default function IdentityConfiguration({ onAccountSelected }: IdentityCon
     </div>
   );
 }
+import { listMainAccounts, listDerivedAccounts } from '@/lib/addressBooksService';

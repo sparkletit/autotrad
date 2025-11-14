@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import pool from '@/lib/db';
+import { ok, fail } from '@/lib/serverUtils';
 
 // DELETE - 删除主账号（包括关联的派生账号）
 export async function DELETE(
@@ -18,15 +19,7 @@ export async function DELETE(
         [mainAccountId]
       );
 
-      if (!accounts || accounts.length === 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: '主账号不存在',
-          },
-          { status: 404 }
-        );
-      }
+      if (!accounts || accounts.length === 0) { return fail('主账号不存在', 404); }
 
       // 删除关联的派生账号
       await connection.execute(
@@ -40,21 +33,12 @@ export async function DELETE(
         [mainAccountId]
       );
 
-      return NextResponse.json({
-        success: true,
-        message: '主账号及其关联的派生账号已删除',
-      });
+      return ok({ message: '主账号及其关联的派生账号已删除' });
     } finally {
       connection.release();
     }
   } catch (error) {
     console.error('删除主账号失败:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: '删除主账号失败',
-      },
-      { status: 500 }
-    );
+    return fail('删除主账号失败', 500);
   }
 }

@@ -3,17 +3,8 @@ import { createPublicClient, createWalletClient, http, parseUnits, formatUnits }
 import { privateKeyToAccount } from 'viem/accounts';
 import { bsc } from 'viem/chains';
 import { Hex } from 'viem';
-import { getPrivateKeyFromDatabase, parseBlockchainError } from '@/lib/serverUtils';
+import { getPrivateKeyFromDatabase, parseBlockchainError, getRpcUrl, createHttpTransport } from '@/lib/serverUtils';
 
-const getRpcUrl = (network: string): string => {
-  const rpcUrls: Record<string, string> = {
-    fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
-    ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
-    bsc: 'https://bsc-dataseed1.bnbchain.org',
-    polygon: 'https://polygon-rpc.com',
-  };
-  return rpcUrls[network] || rpcUrls.fork;
-};
 
 // PancakeSwap V2 Router 地址
 const ROUTER_ADDRESS = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
@@ -37,6 +28,24 @@ const ROUTER_ABI = [
     outputs: [
       { name: 'amountA', type: 'uint256' },
       { name: 'amountB', type: 'uint256' },
+      { name: 'liquidity', type: 'uint256' },
+    ],
+  },
+  {
+    name: 'addLiquidityETH',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'amountTokenDesired', type: 'uint256' },
+      { name: 'amountTokenMin', type: 'uint256' },
+      { name: 'amountETHMin', type: 'uint256' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [
+      { name: 'amountToken', type: 'uint256' },
+      { name: 'amountETH', type: 'uint256' },
       { name: 'liquidity', type: 'uint256' },
     ],
   },
@@ -65,6 +74,13 @@ const ERC20_ABI = [
     constant: true,
     inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }],
     name: 'allowance',
+    outputs: [{ name: '', type: 'uint256' }],
+    type: 'function',
+  },
+  {
+    constant: true,
+    inputs: [{ name: 'account', type: 'address' }],
+    name: 'balanceOf',
     outputs: [{ name: '', type: 'uint256' }],
     type: 'function',
   },
@@ -127,11 +143,7 @@ export async function POST(request: NextRequest) {
     const rpcUrl = getRpcUrl(network);
     const accountSigner = privateKeyToAccount(privateKey as Hex);
 
-    const transport = http(rpcUrl, {
-      timeout: 0,
-      retryCount: 3,
-      retryDelay: 1000,
-    });
+    const transport = createHttpTransport(rpcUrl, { timeout: 0, retryCount: 3, retryDelay: 1000 });
 
     const publicClient = createPublicClient({
       chain: bsc,
@@ -249,26 +261,53 @@ export async function POST(request: NextRequest) {
     // 7. 设置deadline（当前时间 + 20分钟）
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
 
-    // 8. 调用 addLiquidity
-    console.log('执行 addLiquidity...');
-    txHash = await walletClient.writeContract({
-      address: ROUTER_ADDRESS as Hex,
-      abi: ROUTER_ABI,
-      functionName: 'addLiquidity',
-      args: [
-        finalTokenA as Hex,
-        finalTokenB as Hex,
-        finalAmountA,
-        finalAmountB,
-        finalMinA,
-        finalMinB,
-        liquidityToAddress as Hex,
-        deadline,
-      ],
-      value: finalTokenA === '0x0000000000000000000000000000000000000000' || finalTokenB === '0x0000000000000000000000000000000000000000'
-        ? (finalTokenA === '0x0000000000000000000000000000000000000000' ? finalAmountA : finalAmountB)
-        : BigInt(0),
-    });
+    const isNativeA = finalTokenA === '0x0000000000000000000000000000000000000000';
+    const isNativeB = finalTokenB === '0x0000000000000000000000000000000000000000';
+
+    if (isNativeA !== isNativeB && (isNativeA || isNativeB)) {
+      const token = isNativeA ? (finalTokenB as Hex) : (finalTokenA as Hex);
+      const amountTokenDesired = isNativeA ? finalAmountB : finalAmountA;
+      const amountTokenMin = isNativeA ? finalMinB : finalMinA;
+      const amountETHMin = isNativeA ? finalMinA : finalMinB;
+      const nativeValue = isNativeA ? finalAmountA : finalAmountB;
+      const sim = await publicClient.simulateContract({
+        address: ROUTER_ADDRESS as Hex,
+        abi: ROUTER_ABI,
+        functionName: 'addLiquidityETH',
+        args: [
+          token,
+          amountTokenDesired,
+          amountTokenMin,
+          amountETHMin,
+          liquidityToAddress as Hex,
+          deadline,
+        ],
+        account: accountSigner,
+        chain: bsc,
+        value: nativeValue,
+      });
+      txHash = await walletClient.writeContract(sim.request);
+    } else {
+      const sim = await publicClient.simulateContract({
+        address: ROUTER_ADDRESS as Hex,
+        abi: ROUTER_ABI,
+        functionName: 'addLiquidity',
+        args: [
+          finalTokenA as Hex,
+          finalTokenB as Hex,
+          finalAmountA,
+          finalAmountB,
+          finalMinA,
+          finalMinB,
+          liquidityToAddress as Hex,
+          deadline,
+        ],
+        account: accountSigner,
+        chain: bsc,
+        value: BigInt(0),
+      });
+      txHash = await walletClient.writeContract(sim.request);
+    }
 
     console.log('✅ 增加流动性交易已发送, 哈希:', txHash);
 
@@ -307,10 +346,11 @@ export async function POST(request: NextRequest) {
         debug: {
           hint: '查看服务日志获取更详细的链上错误与上下文',
           context: debugCtx,
+          shortMessage: error?.shortMessage,
+          cause: error?.cause?.message,
         },
       },
       { status: 500 }
     );
   }
 }
-

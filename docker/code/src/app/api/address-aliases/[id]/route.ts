@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import mysql from 'mysql2/promise';
+import { ok, fail } from '@/lib/serverUtils';
 
 const dbConfig = {
   host: 'mysql',
@@ -24,12 +25,7 @@ export async function PUT(
     const body = await request.json();
     const { alias, address, network, type } = body;
 
-    if (!alias || !address || !network || !type) {
-      return NextResponse.json(
-        { success: false, error: '缺少必要参数' },
-        { status: 400 }
-      );
-    }
+    if (!alias || !address || !network || !type) { return fail('缺少必要参数', 400); }
 
     connection = await mysql.createConnection(dbConfig);
 
@@ -39,13 +35,7 @@ export async function PUT(
       [alias, address, id]
     );
 
-    if ((existing as any[]).length > 0) {
-      await connection.end();
-      return NextResponse.json(
-        { success: false, error: '该别名或地址已被其他记录使用' },
-        { status: 400 }
-      );
-    }
+    if ((existing as any[]).length > 0) { await connection.end(); return fail('该别名或地址已被其他记录使用', 400); }
 
     // 更新别名
     const [result] = await connection.execute(
@@ -55,24 +45,13 @@ export async function PUT(
 
     await connection.end();
 
-    if ((result as any).affectedRows === 0) {
-      return NextResponse.json(
-        { success: false, error: '交易池地址不存在' },
-        { status: 404 }
-      );
-    }
+    if ((result as any).affectedRows === 0) { return fail('交易池地址不存在', 404); }
 
-    return NextResponse.json({
-      success: true,
-      message: '交易池地址更新成功',
-    });
+    return ok({ message: '交易池地址更新成功' });
   } catch (error) {
     console.error('更新交易池地址失败:', error);
     if (connection) await connection.end();
-    return NextResponse.json(
-      { success: false, error: '更新交易池地址失败' },
-      { status: 500 }
-    );
+    return fail('更新交易池地址失败', 500);
   }
 }
 
@@ -99,23 +78,12 @@ export async function DELETE(
 
     await connection.end();
 
-    if ((result as any).affectedRows === 0) {
-      return NextResponse.json(
-        { success: false, error: '交易池地址不存在' },
-        { status: 404 }
-      );
-    }
+    if ((result as any).affectedRows === 0) { return fail('交易池地址不存在', 404); }
 
-    return NextResponse.json({
-      success: true,
-      message: '交易池地址删除成功',
-    });
+    return ok({ message: '交易池地址删除成功' });
   } catch (error) {
     console.error('删除交易池地址失败:', error);
     if (connection) await connection.end();
-    return NextResponse.json(
-      { success: false, error: '删除交易池地址失败' },
-      { status: 500 }
-    );
+    return fail('删除交易池地址失败', 500);
   }
 }

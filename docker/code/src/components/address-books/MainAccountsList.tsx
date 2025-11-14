@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { deleteMainAccount } from '@/lib/addressBooksService';
 import DerivedAccountsList from './DerivedAccountsList';
 import SecretKeysModal from './SecretKeysModal';
 
@@ -42,20 +43,12 @@ export default function MainAccountsList({ accounts, loading, onRefresh }: Props
 
     try {
       setDeleting(accountId);
-      const response = await fetch(
-        `/api/address-books/main-accounts/${accountId}`,
-        {
-          method: 'DELETE',
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await deleteMainAccount(accountId);
+      if (success) {
         alert('主账号已删除');
         onRefresh();
       } else {
-        alert(data.error || '删除失败，请稍后重试');
+        alert(error || '删除失败，请稍后重试');
       }
     } catch (error) {
       alert('删除失败，请稍后重试');

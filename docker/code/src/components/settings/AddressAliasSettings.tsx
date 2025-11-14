@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import apiService from '@/lib/apiService';
+import { listAliases, addAlias, updateAlias, deleteAlias } from '@/lib/addressAliasesService';
 
 interface AddressAlias {
   id: number;
@@ -38,13 +40,12 @@ const AddressAliasSettings: React.FC = () => {
   const fetchAliases = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/address-aliases');
-      const data = await response.json();
-      if (data.success) {
-        setAliases(data.data || []);
+      const { success, data, error } = await listAliases();
+      if (success) {
+        setAliases((data as any) || []);
         setError('');
       } else {
-        setError(data.error || '获取数据失败');
+        setError(error || '获取数据失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
@@ -62,19 +63,8 @@ const AddressAliasSettings: React.FC = () => {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/address-aliases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          alias: newAlias,
-          address: newAddress,
-          network: newNetwork,
-          type: newType,
-        }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const { success, error } = await addAlias({ alias: newAlias, address: newAddress, network: newNetwork, type: newType });
+      if (success) {
         setSuccess('交易池地址添加成功');
         setNewAlias('');
         setNewAddress('');
@@ -82,7 +72,7 @@ const AddressAliasSettings: React.FC = () => {
         setNewType('个人');
         await fetchAliases();
       } else {
-        setError(data.error || '添加失败');
+        setError(error || '添加失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加失败');
@@ -109,24 +99,13 @@ const AddressAliasSettings: React.FC = () => {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/address-aliases/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          alias: editAlias,
-          address: editAddress,
-          network: editNetwork,
-          type: editType,
-        }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const { success, error } = await updateAlias(id, { alias: editAlias, address: editAddress, network: editNetwork, type: editType });
+      if (success) {
         setSuccess('交易池地址更新成功');
         setEditingId(null);
         await fetchAliases();
       } else {
-        setError(data.error || '更新失败');
+        setError(error || '更新失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新失败');
@@ -143,16 +122,12 @@ const AddressAliasSettings: React.FC = () => {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/address-aliases/${id}`, {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const { success, error } = await deleteAlias(id);
+      if (success) {
         setSuccess('交易池地址删除成功');
         await fetchAliases();
       } else {
-        setError(data.error || '删除失败');
+        setError(error || '删除失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');

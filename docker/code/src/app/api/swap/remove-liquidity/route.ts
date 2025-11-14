@@ -3,17 +3,8 @@ import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, 
 import { privateKeyToAccount } from 'viem/accounts';
 import { bsc } from 'viem/chains';
 import { Hex } from 'viem';
-import { getPrivateKeyFromDatabase, parseBlockchainError } from '@/lib/serverUtils';
+import { getPrivateKeyFromDatabase, parseBlockchainError, getRpcUrl, createHttpTransport } from '@/lib/serverUtils';
 
-const getRpcUrl = (network: string): string => {
-  const rpcUrls: Record<string, string> = {
-    fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
-    ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
-    bsc: 'https://bsc-dataseed1.bnbchain.org',
-    polygon: 'https://polygon-rpc.com',
-  };
-  return rpcUrls[network] || rpcUrls.fork;
-};
 
 // PancakeSwap V2 Router 地址
 const ROUTER_ADDRESS = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
@@ -161,11 +152,7 @@ export async function POST(request: NextRequest) {
     const rpcUrl = getRpcUrl(network);
     const accountSigner = privateKeyToAccount(privateKey as Hex);
 
-    const transport = http(rpcUrl, {
-      timeout: 0,
-      retryCount: 3,
-      retryDelay: 1000,
-    });
+    const transport = createHttpTransport(rpcUrl, { timeout: 0, retryCount: 3, retryDelay: 1000 });
 
     const publicClient = createPublicClient({
       chain: bsc,

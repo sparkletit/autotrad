@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createPublicClient, http } from 'viem';
 import type { Address, Hex } from 'viem';
 import { formatBalance, normalizeAddress } from '@/lib/utils';
+import { getRpcUrl, ok, fail, serverFetch, parseBlockchainError } from '@/lib/serverUtils';
 
 /**
  * GET /api/accounts/[address]/balances
@@ -17,19 +18,13 @@ export async function GET(
   try {
     const { address } = await params;
     if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
-      return NextResponse.json(
-        { success: false, error: '无效的以太坊地址' },
-        { status: 400 }
-      );
+      return fail('无效的以太坊地址', 400);
     }
     let checksumAddress: Address;
     try {
       checksumAddress = normalizeAddress(address);
     } catch (e) {
-      return NextResponse.json(
-        { success: false, error: '无效的以太坊地址' },
-        { status: 400 }
-      );
+      return fail('无效的以太坊地址', 400);
     }
 
     // 获取查询参数，指定要查询的代币
@@ -39,7 +34,7 @@ export async function GET(
       ? tokensParam.split(',').map(t => t.trim().toUpperCase())
       : ['BNB']; // 默认只查询 BNB
 
-    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
+    const rpcUrl = getRpcUrl('fork');
     const publicClient = createPublicClient({
       transport: http(rpcUrl),
     });
@@ -71,7 +66,7 @@ export async function GET(
     // 从数据库中读取自定义代币，统一与 /api/custom-tokens 行为
     let erc20Tokens: { symbol: string; name: string; address: string; decimals: number }[] = [];
     try {
-      const resp = await fetch('http://localhost:8888/api/custom-tokens');
+      const resp = await serverFetch('http://localhost:8888/api/custom-tokens', { method: 'GET' }, 5000);
       const json = await resp.json();
       if (json?.success && Array.isArray(json.data)) {
         erc20Tokens = json.data.map((t: any) => ({
@@ -152,15 +147,9 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: balances,
-    });
+    return ok(balances);
   } catch (error) {
     console.error('获取账户余额失败:', error);
-    return NextResponse.json(
-      { success: false, error: '获取账户余额失败' },
-      { status: 500 }
-    );
+    return fail(parseBlockchainError(error), 500);
   }
 }

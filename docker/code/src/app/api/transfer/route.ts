@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createPublicClient, createWalletClient, http, Hex, parseEther, parseUnits, encodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { bsc } from 'viem/chains';
-import { getPrivateKeyFromDatabase } from '@/lib/serverUtils';
+import { getPrivateKeyFromDatabase, getRpcUrl, ok, fail } from '@/lib/serverUtils';
 
 // ERC20 ABI - 只需要转账相关的函数
 const ERC20_ABI = [
@@ -45,10 +45,7 @@ export async function POST(request: NextRequest) {
 
     if (!fromAddress || !toAddress || !amount) {
       console.error('❌ 缺少必要参数');
-      return NextResponse.json(
-        { success: false, error: '缺少必要参数: fromAddress, toAddress, amount' },
-        { status: 400 }
-      );
+      return fail('缺少必要参数: fromAddress, toAddress, amount', 400);
     }
     
     console.log('✅ 参数验证通过');
@@ -61,14 +58,11 @@ export async function POST(request: NextRequest) {
     const privateKey = await getPrivateKeyFromDatabase(fromAddress);
     if (!privateKey) {
       console.error('❌ 无法获取私钥');
-      return NextResponse.json(
-        { success: false, error: `账户 ${fromAddress} 的私钥不存在，请确保该账户已导入` },
-        { status: 400 }
-      );
+      return fail(`账户 ${fromAddress} 的私钥不存在，请确保该账户已导入`, 400);
     }
 
     // 2. 创建账户和客户端
-    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
+    const rpcUrl = getRpcUrl('fork');
     const account = privateKeyToAccount(privateKey as Hex);
     
     // 配置 HTTP transport
@@ -86,15 +80,12 @@ export async function POST(request: NextRequest) {
     
     // 先测试 RPC 连接是否正常
     try {
-      const testClient = createPublicClient({
-        chain: bsc,
-        transport: http(rpcUrl, { timeout: 10000 }),
-      });
+      const testClient = createPublicClient({ chain: bsc, transport: http(rpcUrl, { timeout: 10000 }) });
       const chainId = await testClient.getChainId();
       console.log('✅ RPC 连接正常，Chain ID:', chainId);
     } catch (err) {
       console.error('❌ RPC 连接失败:', err);
-      throw new Error(`无法连接到 Anvil RPC: ${rpcUrl}. 请确保 Anvil Fork 网络已启动。`);
+      throw new Error(`无法连接到 RPC: ${rpcUrl}. 请确保 Fork 网络已启动。`);
     }
     
     const publicClient = createPublicClient({
@@ -239,11 +230,10 @@ export async function POST(request: NextRequest) {
           console.error('❌ 等待交易确认时出错:', err);
         });
 
-        return NextResponse.json({
-          success: true,
+        return ok({
           message: `BNB 转账交易已提交`,
           txHash: hash,
-          tip: `\r\t使用 cast tx ${hash} --rpc-url http://anvil-api:8545 查看交易详情`,
+          tip: `使用 cast tx ${hash} --rpc-url ${rpcUrl} 查看交易详情`,
         });
       } catch (error: any) {
         console.error('❌ BNB 转账失败:', error);
@@ -396,11 +386,10 @@ export async function POST(request: NextRequest) {
           console.error('❌ 等待交易确认时出错:', err);
         });
 
-        return NextResponse.json({
-          success: true,
+        return ok({
           message: `ERC20 代币转账交易已提交`,
           txHash: hash,
-          tip: `使用 cast tx ${hash} --rpc-url http://anvil-api:8545 查看交易详情`,
+          tip: `使用 cast tx ${hash} --rpc-url ${rpcUrl} 查看交易详情`,
         });
       } catch (err: any) {
         console.error('❌ ERC20 转账失败:', err);
@@ -411,9 +400,6 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('❌ 转账失败:', error);
     const rawMessage = typeof error === 'string' ? error : (error?.message || String(error));
-    return NextResponse.json(
-      { success: false, error: rawMessage },
-      { status: 500 }
-    );
+    return fail(rawMessage, 500);
   }
 }

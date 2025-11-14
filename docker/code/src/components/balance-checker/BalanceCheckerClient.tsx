@@ -3,6 +3,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Header from '@/components/Header';
+import apiService from '@/lib/apiService';
+import { useNetwork } from '@/lib/networkStore';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
 import { fetchAllAccounts, fetchCustomTokens, fetchTokenBalances } from '@/lib/addressService';
 
@@ -50,7 +52,7 @@ interface AccountOption {
 
 export default function BalanceCheckerClient() {
   const [searchAddress, setSearchAddress] = useState('');
-  const [selectedNetwork, setSelectedNetwork] = useState('fork');
+  const net = useNetwork();
   const [allAccounts, setAllAccounts] = useState<AccountOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([
@@ -118,14 +120,14 @@ export default function BalanceCheckerClient() {
     }
 
     try {
-      const record = {
-        id: Date.now(),
-        label: saveLabel.trim(),
-        address: queriedAddress,
-        network: selectedNetwork,
-        balances: balances,
-        timestamp: new Date().toISOString(),
-      };
+        const record = {
+          id: Date.now(),
+          label: saveLabel.trim(),
+          address: queriedAddress,
+          network: net,
+          balances: balances,
+          timestamp: new Date().toISOString(),
+        };
 
       const existingRecords = savedRecords || [];
       const updatedRecords = [...existingRecords, record];
@@ -139,7 +141,7 @@ export default function BalanceCheckerClient() {
       
       // 更新匹配的记录
       const matched = updatedRecords.filter(
-        (r) => r.address.toLowerCase() === queriedAddress.toLowerCase() && r.network === selectedNetwork
+        (r) => r.address.toLowerCase() === queriedAddress.toLowerCase() && r.network === net
       );
       setMatchedRecords(matched);
     } catch (err) {
@@ -270,25 +272,20 @@ export default function BalanceCheckerClient() {
       // 只查询选中的代币（排除BNB，BNB由API单独处理）
       const tokensToQuery = customTokens.filter((t) => selectedTokens.has(t.address));
       const tokensJson = JSON.stringify(tokensToQuery);
-      const response = await fetch(
-        `/api/balance-checker?address=${searchAddress}&network=${selectedNetwork}&tokens=${encodeURIComponent(tokensJson)}`
-      );
-      const data = await response.json();
+      const { success, data, error } = await apiService.get(`/api/balance-checker?address=${searchAddress}&network=${net}&tokens=${encodeURIComponent(tokensJson)}`);
 
-      if (data.success) {
-        setBalances(data.data.balances || []);
-        setQueriedAddress(data.data.address);
+      if (success) {
+        setBalances(((data as any)?.balances) || []);
+        setQueriedAddress(((data as any)?.address));
         setCurrentRecordLabel(null); // 清除当前记录标签
         
         // 查找匹配的历史记录（相同地址和网络）
-        const matched = savedRecords.filter(
-          (record) => record.address.toLowerCase() === data.data.address.toLowerCase() && record.network === selectedNetwork
-        );
+        const matched = savedRecords.filter((record) => record.address.toLowerCase() === String(((data as any)?.address || '')).toLowerCase() && record.network === net);
         setMatchedRecords(matched);
         
-        setSuccess(`成功查询 ${data.data.address} 的余额`);
+        setSuccess(`成功查询 ${((data as any)?.address)} 的余额`);
       } else {
-        setError(data.error || '查询失败');
+        setError(error || '查询失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '查询失败');
@@ -318,20 +315,7 @@ export default function BalanceCheckerClient() {
           <div className="grid grid-cols-1 gap-6">
             {/* 查询表单 */}
             <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-3">选择网络</label>
-                <select
-                  value={selectedNetwork}
-                  onChange={(e) => setSelectedNetwork(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {networks.map((net) => (
-                    <option key={net.id} value={net.id}>
-                      {net.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* 网络选择已统一到 Header */}
 
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-3">账号选择</label>

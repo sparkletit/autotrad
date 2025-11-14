@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import DeFiNavigation from '@/components/swap/DeFiNavigation';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
+import apiService from '@/lib/apiService';
+import { queryReserves, removeLiquidity } from '@/lib/swapService';
 import { formatUnits } from 'viem';
 
 const RemoveLiquidityClient: React.FC = () => {
@@ -26,14 +28,9 @@ const RemoveLiquidityClient: React.FC = () => {
     const autoFillLPBalance = async () => {
       if (!account || !pairAddress || !pairAddress.match(/^0x[a-fA-F0-9]{40}$/)) return;
       try {
-        const resp = await fetch('/api/swap/get-reserves', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pairAddress, network, account }),
-        });
-        const data = await resp.json();
-        if (data.success) {
-          const lpBalanceWei = data.data?.lpBalance || data.lpBalance || '0';
+        const { success, data } = await queryReserves({ pairAddress, network, account });
+        if (success) {
+          const lpBalanceWei = (data as any)?.lpBalance || (data as any)?.lpBalance || '0';
           // 将原始 Wei 单位转换为人类单位（18位）以便展示与提交
           try {
             const humanReadable = formatUnits(BigInt(lpBalanceWei), 18);
@@ -72,18 +69,13 @@ const RemoveLiquidityClient: React.FC = () => {
         network,
       };
 
-      const resp = await fetch('/api/swap/remove-liquidity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await resp.json();
-      if (data.success) {
-        setSuccess(data.data?.message || '提交成功');
-        setTxHash(data.data?.txHash || '');
+      const { success, data, error } = await removeLiquidity(body);
+      if (success) {
+        setSuccess(((data as any)?.message) || '提交成功');
+        setTxHash(((data as any)?.txHash) || '');
       } else {
-        setError(data.error || '提交失败');
-        setTxHash(data.data?.txHash || '');
+        setError(error || '提交失败');
+        setTxHash(((data as any)?.txHash) || '');
       }
     } catch (e: any) {
       setError(e?.message || '提交失败');

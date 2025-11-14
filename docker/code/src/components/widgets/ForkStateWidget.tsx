@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import apiService from '@/lib/apiService';
 
 interface ForkStateWidgetProps {
   isOpen: boolean;
@@ -24,25 +25,23 @@ const ForkStateWidget: React.FC<ForkStateWidgetProps> = ({ isOpen, onClose, onSu
 
   const checkForkStatus = async () => {
     try {
-      const response = await fetch('/api/fork/status');
-      const data = await response.json();
-      setIsForkRunning(data.isRunning || false);
+      const { success, data } = await apiService.get('/api/fork/status');
+      const payload = data as any;
+      setIsForkRunning(payload?.isRunning || false);
       
       if (data.isRunning) {
         // 从状态 API 获取 fork 信息（包含更完整的配置）
         // status API 返回的 config 字段包含完整的 fork 配置
         let forkConfigData = null;
         
-        if (data.config) {
+        if (payload?.config) {
           // 如果 status API 返回了 config，使用它
-          forkConfigData = data.config;
+          forkConfigData = payload.config;
         } else {
           // 否则从配置 API 获取
-          const configResponse = await fetch('/api/fork/config');
-          const configData = await configResponse.json();
-          
-          if (configData.success && configData.currentConfig) {
-            forkConfigData = configData.currentConfig;
+          const { success: cSucc, data: cData } = await apiService.get('/api/fork/config');
+          if (cSucc && (cData as any)?.currentConfig) {
+            forkConfigData = (cData as any).currentConfig;
           }
         }
         
@@ -62,10 +61,9 @@ const ForkStateWidget: React.FC<ForkStateWidgetProps> = ({ isOpen, onClose, onSu
           
           // 如果缺少 chainKey，尝试从 chains 中查找
           if (!configToSave.chainKey && configToSave.chainId) {
-            const configResponse = await fetch('/api/fork/config');
-            const configData = await configResponse.json();
-            if (configData.success && configData.chains) {
-              const matchingChain = configData.chains.find(
+            const { success: confSucc, data: confData } = await apiService.get('/api/fork/config');
+            if (confSucc && (confData as any)?.chains) {
+              const matchingChain = (confData as any).chains.find(
                 (chain: any) => chain.id === configToSave.chainId
               );
               if (matchingChain) {
@@ -120,23 +118,16 @@ const ForkStateWidget: React.FC<ForkStateWidgetProps> = ({ isOpen, onClose, onSu
         requestBody.chainKey = forkConfig.chainKey;
       }
 
-      const response = await fetch('/api/fork/save-state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setSuccess(data.message || `状态已保存为 "${stateName}"`);
+      const { success, data, error } = await apiService.post('/api/fork/save-state', requestBody);
+      if (success) {
+        setSuccess(((data as any)?.message) || `状态已保存为 "${stateName}"`);
         setStateName('');
         onSuccess?.();
         setTimeout(() => {
           setSuccess('');
         }, 3000);
       } else {
-        setError(data.error || '保存失败');
+        setError(error || '保存失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
@@ -155,8 +146,8 @@ const ForkStateWidget: React.FC<ForkStateWidgetProps> = ({ isOpen, onClose, onSu
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4 relative z-50">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-gray-900">
             💾 保存 Fork 网络状态
@@ -256,4 +247,3 @@ const ForkStateWidget: React.FC<ForkStateWidgetProps> = ({ isOpen, onClose, onSu
 };
 
 export default ForkStateWidget;
-

@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { ethers } from 'ethers';
-import { getPrivateKeyFromDatabase, parseBlockchainError } from '@/lib/serverUtils';
+import { getPrivateKeyFromDatabase, parseBlockchainError, ok, fail, getRpcUrl } from '@/lib/serverUtils';
 
 // 辅助函数：将对象中的 BigInt 转换为字符串
 function convertBigIntToString(obj: any): any {
@@ -41,10 +41,7 @@ export async function POST(request: NextRequest) {
 
     // 验证必填字段
     if (!account_address || !contract_address || !abi_content || !function_name) {
-      return NextResponse.json(
-        { success: false, error: '缺少必填字段' },
-        { status: 400 }
-      );
+      return fail('缺少必填字段', 400);
     }
 
     // 解析ABI
@@ -52,10 +49,7 @@ export async function POST(request: NextRequest) {
     try {
       abiArray = typeof abi_content === 'string' ? JSON.parse(abi_content) : abi_content;
     } catch (e) {
-      return NextResponse.json(
-        { success: false, error: 'ABI格式错误' },
-        { status: 400 }
-      );
+      return fail('ABI格式错误', 400);
     }
 
     console.log('========== 执行自定义函数 ==========');
@@ -67,14 +61,11 @@ export async function POST(request: NextRequest) {
     const privateKey = await getPrivateKeyFromDatabase(account_address);
     if (!privateKey) {
       console.error('❌ 无法获取私钥');
-      return NextResponse.json(
-        { success: false, error: `账户 ${account_address} 的私钥不存在，请确保该账户已导入` },
-        { status: 400 }
-      );
+      return fail(`账户 ${account_address} 的私钥不存在，请确保该账户已导入`, 400);
     }
     
     // 2. 连接到 Fork 网络（配置无超时限制）
-    const rpcUrl = process.env.ANVIL_RPC_URL || 'http://anvil-api:8545';
+    const rpcUrl = getRpcUrl('fork');
     const provider = new ethers.JsonRpcProvider(rpcUrl, undefined, {
       staticNetwork: true, // 使用静态网络，避免额外的网络检测请求
       batchMaxCount: 1,    // 禁用批量请求
@@ -85,10 +76,7 @@ export async function POST(request: NextRequest) {
       const balance = await provider.getBalance(account_address);
       console.log(`账户 ${account_address} 的余额: ${balance.toString()}`);
     } catch (e) {
-      return NextResponse.json(
-        { success: false, error: `无效的账户地址: ${account_address}` },
-        { status: 400 }
-      );
+      return fail(`无效的账户地址: ${account_address}`, 400);
     }
     
     // 3. 创建签名器
@@ -248,14 +236,7 @@ export async function POST(request: NextRequest) {
         const friendlyErrorMessage = parseBlockchainError(err);
         const lowerMsg = String(err?.message || err).toLowerCase();
         const isParamIssue = lowerMsg.includes('revert') || lowerMsg.includes('execution reverted');
-        return NextResponse.json(
-          {
-            success: false,
-            error: friendlyErrorMessage,
-            details: err?.message || String(err),
-          },
-          { status: isParamIssue ? 400 : 500 }
-        );
+        return fail(friendlyErrorMessage, isParamIssue ? 400 : 500, { details: err?.message || String(err) });
       }
     } else {
       tx = await contract[function_name](...paramsArray, txOptions);
@@ -292,11 +273,7 @@ export async function POST(request: NextRequest) {
       console.log('✅ 函数执行成功（只读函数）');
       console.log('返回值:', tx);
       const safeResult = convertBigIntToString(tx);
-      return NextResponse.json({
-        success: true,
-        message: '函数执行成功',
-        result: safeResult,
-      });
+      return ok({ message: '函数执行成功', result: safeResult });
     }
 
     if (!receipt) {
@@ -314,7 +291,6 @@ export async function POST(request: NextRequest) {
 
     // 构造响应
     const response: any = {
-      success: true,
       message: '函数执行成功',
       txHash: receipt.hash || tx.hash,
       blockNumber: receipt.blockNumber?.toString() || '0',
@@ -327,7 +303,7 @@ export async function POST(request: NextRequest) {
     response.result = '0x'; // 无返回值
 
     console.log('========== 自定义函数执行成功 ==========');
-    return NextResponse.json(response);
+    return ok(response);
   } catch (error: any) {
     console.error('❌ 执行自定义函数失败:', error);
     
@@ -335,13 +311,6 @@ export async function POST(request: NextRequest) {
     const friendlyErrorMessage = parseBlockchainError(error);
     console.error('解读后的错误:', friendlyErrorMessage);
     
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: friendlyErrorMessage,
-        details: error.message || error.toString(),
-      },
-      { status: 500 }
-    );
+    return fail(friendlyErrorMessage, 500, { details: error.message || error.toString() });
   }
 }

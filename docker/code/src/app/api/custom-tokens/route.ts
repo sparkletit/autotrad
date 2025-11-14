@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { normalizeAddress } from '@/lib/utils';
 import mysql from 'mysql2/promise';
+import { ok, fail, parseBlockchainError } from '@/lib/serverUtils';
 
 const pool = mysql.createPool({
   host: process.env.MYSQL_HOST || 'mysql',
@@ -24,16 +25,10 @@ export async function GET() {
     );
     connection.release();
 
-    return NextResponse.json({
-      success: true,
-      data: rows,
-    });
+    return ok(rows);
   } catch (error) {
     console.error('获取自定义代币失败:', error);
-    return NextResponse.json(
-      { success: false, error: '获取自定义代币失败' },
-      { status: 500 }
-    );
+    return fail(parseBlockchainError(error), 500);
   }
 }
 
@@ -46,31 +41,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { symbol, address, decimals } = body;
 
-    if (!symbol || !address || decimals === undefined || decimals === null || decimals === '') {
-      return NextResponse.json(
-        { success: false, error: '缺少必要参数' },
-        { status: 400 }
-      );
-    }
+    if (!symbol || !address || decimals === undefined || decimals === null || decimals === '') { return fail('缺少必要参数', 400); }
 
     const decimalsNum = parseInt(String(decimals));
-    if (isNaN(decimalsNum) || decimalsNum < 0 || decimalsNum > 255) {
-      return NextResponse.json(
-        { success: false, error: '精度必须是0-255之间的整数' },
-        { status: 400 }
-      );
-    }
+    if (isNaN(decimalsNum) || decimalsNum < 0 || decimalsNum > 255) { return fail('精度必须是0-255之间的整数', 400); }
 
     // 规范化地址（EIP-55 校验和），并进行格式校验
     let normalizedAddress: string;
-    try {
-      normalizedAddress = normalizeAddress(address);
-    } catch (e) {
-      return NextResponse.json(
-        { success: false, error: `无效的代币地址: ${address}` },
-        { status: 400 }
-      );
-    }
+    try { normalizedAddress = normalizeAddress(address); } catch (e) { return fail(`无效的代币地址: ${address}`, 400); }
 
     const connection = await pool.getConnection();
 
@@ -80,13 +58,7 @@ export async function POST(request: NextRequest) {
       [normalizedAddress]
     );
 
-    if (Array.isArray(existing) && existing.length > 0) {
-      connection.release();
-      return NextResponse.json(
-        { success: false, error: '该代币地址已存在' },
-        { status: 400 }
-      );
-    }
+    if (Array.isArray(existing) && existing.length > 0) { connection.release(); return fail('该代币地址已存在', 400); }
 
     // 检查是否存在已删除的同地址代币，如果存在则更新，否则插入新代币
     const [deletedRecord] = await connection.query(
@@ -111,19 +83,9 @@ export async function POST(request: NextRequest) {
 
     connection.release();
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        symbol: symbol.toUpperCase(),
-        address: normalizedAddress,
-        decimals: decimalsNum,
-      },
-    });
+    return ok({ symbol: symbol.toUpperCase(), address: normalizedAddress, decimals: decimalsNum });
   } catch (error) {
     console.error('添加自定义代币失败:', error);
-    return NextResponse.json(
-      { success: false, error: '添加自定义代币失败' },
-      { status: 500 }
-    );
+    return fail(parseBlockchainError(error), 500);
   }
 }

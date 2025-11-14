@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import CreateDerivedAccountModal from './CreateDerivedAccountModal';
 import DerivedAccountCard from './DerivedAccountCard';
+import { listDerivedAccounts, deleteDerivedBatch } from '@/lib/addressBooksService';
 
 interface DerivedAccount {
   id: number;
@@ -33,13 +34,9 @@ export default function DerivedAccountsList({
   const fetchDerivedAccounts = async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        `/api/address-books/main-accounts/${mainAccountId}/derived-accounts`
-      );
-      const data = await response.json();
-
-      if (data.success) {
-        setDerivedAccounts(data.data);
+      const { success, data } = await listDerivedAccounts(mainAccountId);
+      if (success) {
+        setDerivedAccounts((data as any) || []);
       }
     } catch (error) {
       console.error('获取派生账号失败:', error);
@@ -88,27 +85,13 @@ export default function DerivedAccountsList({
 
     try {
       setDeleting(true);
-      const response = await fetch(
-        `/api/address-books/main-accounts/${mainAccountId}/derived-accounts/delete-batch`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            accountIds: Array.from(selectedIds),
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await deleteDerivedBatch(mainAccountId, Array.from(selectedIds));
+      if (success) {
         alert(`已删除 ${selectedIds.size} 个派生账号`);
         setSelectedIds(new Set());
         fetchDerivedAccounts();
       } else {
-        alert(data.error || '删除失败，请稍后重试');
+        alert(error || '删除失败，请稍后重试');
       }
     } catch (error) {
       alert('删除失败，请稍后重试');

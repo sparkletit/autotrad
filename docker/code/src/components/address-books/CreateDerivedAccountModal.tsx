@@ -40,27 +40,12 @@ export default function CreateDerivedAccountModal({
       setLoading(true);
       setError('');
 
-      const response = await fetch(
-        `/api/address-books/main-accounts/${mainAccountId}/derived-accounts`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            accountName: accountName.trim(),
-            derivationIndex,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await createDerivedAccount(mainAccountId, { accountName: accountName.trim(), derivationIndex });
+      if (success) {
         alert('派生账号创建成功！');
         onSuccess();
       } else {
-        setError(data.error || '创建失败，请稍后重试');
+        setError(error || '创建失败，请稍后重试');
       }
     } catch (err) {
       setError('创建失败，请稍后重试');
@@ -96,28 +81,13 @@ export default function CreateDerivedAccountModal({
           currentIndex++;
         }
 
-        const response = await fetch(
-          `/api/address-books/main-accounts/${mainAccountId}/derived-accounts`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              accountName: `${baseNamePrefix} #${i + 1}`,
-              derivationIndex: currentIndex,
-            }),
-          }
-        );
-
-        const data = await response.json();
-
-        if (data.success) {
+        const { success } = await createDerivedAccount(mainAccountId, { accountName: `${baseNamePrefix} #${i + 1}`, derivationIndex: currentIndex });
+        if (success) {
           successCount++;
           existingIndexes.push(currentIndex);
           currentIndex++;
         } else {
-          console.error(`创建第 ${i + 1} 个派生账号失败: ${data.error}`);
+          console.error(`创建第 ${i + 1} 个派生账号失败`);
         }
       }
 
@@ -269,3 +239,4 @@ export default function CreateDerivedAccountModal({
     </div>
   );
 }
+import { createDerivedAccount } from '@/lib/addressBooksService';

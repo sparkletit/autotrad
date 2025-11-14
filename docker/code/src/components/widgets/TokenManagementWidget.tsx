@@ -43,19 +43,8 @@ const TokenManagementWidget: React.FC<TokenManagementWidgetProps> = ({ isOpen, o
 
     setLoading(true);
     try {
-      const response = await fetch('/api/custom-tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          symbol: tokenSymbol.toUpperCase(),
-          address: tokenAddress,
-          decimals,
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
+      const { success, error } = await addToken({ symbol: tokenSymbol.toUpperCase(), address: tokenAddress, decimals });
+      if (success) {
         setSuccess(`成功添加代币 ${tokenSymbol}！`);
         setTokenAddress('');
         setTokenSymbol('');
@@ -65,7 +54,7 @@ const TokenManagementWidget: React.FC<TokenManagementWidgetProps> = ({ isOpen, o
           onSuccess?.();
         }, 1500);
       } else {
-        setError(data.error || '添加失败');
+        setError(error || '添加失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加失败');
@@ -162,3 +151,4 @@ const TokenManagementWidget: React.FC<TokenManagementWidgetProps> = ({ isOpen, o
 };
 
 export default TokenManagementWidget;
+import { addToken } from '@/lib/tokensService';

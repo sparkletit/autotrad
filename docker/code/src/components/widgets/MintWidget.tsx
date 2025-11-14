@@ -32,19 +32,8 @@ const MintWidget: React.FC<MintWidgetProps> = ({ isOpen, onClose, onSuccess }) =
 
     setLoading(true);
     try {
-      const response = await fetch('/api/fork/mint', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address: selectedAddress,
-          amount: mintAmount,
-          token: 'BNB',
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await apiService.post('/api/fork/mint', { address: selectedAddress, amount: mintAmount, token: 'BNB' });
+      if (success) {
         setSuccess(`成功Mint ${mintAmount} BNB！`);
         setMintAmount('');
         setSelectedAddress('');
@@ -53,7 +42,7 @@ const MintWidget: React.FC<MintWidgetProps> = ({ isOpen, onClose, onSuccess }) =
           onSuccess?.();
         }, 1500);
       } else {
-        setError(data.error || 'Mint失败');
+        setError(error || 'Mint失败');
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Mint失败';
@@ -161,3 +150,4 @@ const MintWidget: React.FC<MintWidgetProps> = ({ isOpen, onClose, onSuccess }) =
 };
 
 export default MintWidget;
+import apiService from '@/lib/apiService';

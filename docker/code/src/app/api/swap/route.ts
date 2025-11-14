@@ -1,16 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createPublicClient, createWalletClient, http, parseUnits, formatUnits } from 'viem';
+import { getRpcUrl, ok, fail } from '@/lib/serverUtils';
 import { Hex } from 'viem';
 
-const getRpcUrl = (network: string): string => {
-  const rpcUrls: Record<string, string> = {
-    fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
-    ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
-    bsc: 'https://bsc-dataseed1.bnbchain.org',
-    polygon: 'https://polygon-rpc.com',
-  };
-  return rpcUrls[network] || rpcUrls.fork;
-};
 
 /**
  * POST /api/swap
@@ -40,36 +32,21 @@ export async function POST(request: NextRequest) {
 
     // 参数验证
     if (!account || !amount || !command) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: '缺少必要参数：account, amount, command',
-        },
-        { status: 400 }
-      );
+      return fail('缺少必要参数：account, amount, command', 400);
     }
 
     // 根据命令检查必要参数
     if (command === 'swapExactETHForTokens' || command === 'swapTokensForExactETH') {
       if (!tokenOut) {
-        return NextResponse.json(
-          { success: false, error: '缺少参数：tokenOut' },
-          { status: 400 }
-        );
+        return fail('缺少参数：tokenOut', 400);
       }
     } else if (command === 'swapExactTokensForETH') {
       if (!tokenIn) {
-        return NextResponse.json(
-          { success: false, error: '缺少参数：tokenIn' },
-          { status: 400 }
-        );
+        return fail('缺少参数：tokenIn', 400);
       }
     } else {
       if (!tokenIn || !tokenOut) {
-        return NextResponse.json(
-          { success: false, error: '缺少必要参数：tokenIn, tokenOut' },
-          { status: 400 }
-        );
+        return fail('缺少必要参数：tokenIn, tokenOut', 400);
       }
     }
 
@@ -144,31 +121,19 @@ export async function POST(request: NextRequest) {
         break;
 
       default:
-        return NextResponse.json(
-          { success: false, error: `不支持的 Swap 命令: ${command}` },
-          { status: 400 }
-        );
+        return fail(`不支持的 Swap 命令: ${command}`, 400);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...result,
-        tokenInDecimals,
-        tokenOutDecimals,
-        amountIn: amountIn.toString(),
-        slippage,
-      },
+    return ok({
+      ...result,
+      tokenInDecimals,
+      tokenOutDecimals,
+      amountIn: amountIn.toString(),
+      slippage,
     });
   } catch (error) {
     console.error('Swap 操作失败:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Swap 操作失败',
-      },
-      { status: 500 }
-    );
+    return fail(error instanceof Error ? error.message : 'Swap 操作失败', 500);
   }
 }
 

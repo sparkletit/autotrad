@@ -39,19 +39,8 @@ const SwapPoolWidget: React.FC<SwapPoolWidgetProps> = ({ isOpen, onClose, onSucc
 
     setLoading(true);
     try {
-      const response = await fetch('/api/address-aliases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          alias: poolName.trim(),
-          address: poolAddress,
-          network: network,
-          type: 'pool',
-        }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const { success, error } = await apiService.post('/api/address-aliases', { alias: poolName.trim(), address: poolAddress, network, type: 'pool' });
+      if (success) {
         setSuccess(`成功添加交易池 "${poolName}"`);
         setPoolName('');
         setPoolAddress('');
@@ -61,7 +50,7 @@ const SwapPoolWidget: React.FC<SwapPoolWidgetProps> = ({ isOpen, onClose, onSucc
           onSuccess?.();
         }, 1000);
       } else {
-        setError(data.error || '添加失败');
+        setError(error || '添加失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加失败');
@@ -161,3 +150,4 @@ const SwapPoolWidget: React.FC<SwapPoolWidgetProps> = ({ isOpen, onClose, onSucc
 };
 
 export default SwapPoolWidget;
+import apiService from '@/lib/apiService';

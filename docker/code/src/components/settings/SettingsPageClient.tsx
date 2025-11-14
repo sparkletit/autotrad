@@ -6,6 +6,7 @@ import Sidebar from '@/components/settings/Sidebar';
 import RPCNodeSettings from '@/components/settings/RPCNodeSettings';
 import AddressAliasSettings from '@/components/settings/AddressAliasSettings';
 import ForkNetworkConfig from '@/components/settings/ForkNetworkConfig';
+import apiService from '@/lib/apiService';
 import IdentityConfiguration from '@/components/settings/IdentityConfiguration';
 import MintFunction from '@/components/settings/MintFunction';
 import AccountAssets from '@/components/settings/AccountAssets';
@@ -48,10 +49,9 @@ export default function SettingsPageClient() {
 
   const fetchInitialForkState = async () => {
     try {
-      const response = await fetch('/api/fork/config');
-      const data = await response.json();
-      if (data.success && data.isForking !== undefined) {
-        setIsForking(data.isForking);
+      const { success, data } = await apiService.get('/api/fork/config');
+      if (success && (data as any)?.isForking !== undefined) {
+        setIsForking((data as any).isForking);
       }
     } catch (err) {
       console.error('获取Fork初始状态失败:', err);

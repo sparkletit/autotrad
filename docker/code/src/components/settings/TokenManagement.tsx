@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import apiService from '@/lib/apiService';
+import { listTokens, addToken, updateToken, deleteToken } from '@/lib/tokensService';
 
 interface Token {
   id: number;
@@ -30,13 +32,12 @@ const TokenManagement: React.FC = () => {
   const fetchTokens = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/custom-tokens');
-      const data = await response.json();
-      if (data.success) {
-        setTokens(data.data || []);
+      const { success, data, error } = await listTokens();
+      if (success) {
+        setTokens((data as any) || []);
         setError('');
       } else {
-        setError('加载代币列表失败');
+        setError(error || '加载代币列表失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载代币列表失败');
@@ -67,24 +68,18 @@ const TokenManagement: React.FC = () => {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/custom-tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          symbol: formData.symbol.toUpperCase(),
-          address: formData.address,
-          decimals,
-        }),
+      const { success, error } = await addToken({
+        symbol: formData.symbol.toUpperCase(),
+        address: formData.address,
+        decimals,
       });
-
-      const data = await response.json();
-      if (data.success) {
+      if (success) {
         setSuccess(`成功添加代币 ${formData.symbol}`);
         resetForm();
         setShowAddModal(false);
         await fetchTokens();
       } else {
-        setError(data.error || '添加失败');
+        setError(error || '添加失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加失败');
@@ -109,23 +104,17 @@ const TokenManagement: React.FC = () => {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/custom-tokens/${editingToken.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          symbol: formData.symbol.toUpperCase(),
-          decimals,
-        }),
+      const { success, error } = await updateToken(editingToken.id, {
+        symbol: formData.symbol.toUpperCase(),
+        decimals,
       });
-
-      const data = await response.json();
-      if (data.success) {
+      if (success) {
         setSuccess(`成功更新代币 ${formData.symbol}`);
         resetForm();
         setEditingToken(null);
         await fetchTokens();
       } else {
-        setError(data.error || '更新失败');
+        setError(error || '更新失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新失败');
@@ -139,16 +128,12 @@ const TokenManagement: React.FC = () => {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/custom-tokens/${id}`, {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const { success, error } = await deleteToken(id);
+      if (success) {
         setSuccess(`成功删除代币 ${symbol}`);
         await fetchTokens();
       } else {
-        setError(data.error || '删除失败');
+        setError(error || '删除失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
@@ -278,8 +263,8 @@ const TokenManagement: React.FC = () => {
 
       {/* 添加/编辑模态框 */}
       {showAddModal || editingToken ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4 relative z-50">
             <h3 className="text-xl font-bold text-gray-900 mb-4">
               {editingToken ? '编辑代币' : '添加新代币'}
             </h3>

@@ -37,26 +37,12 @@ export default function DerivedAccountCard({ account, mainAccountId, onRefresh, 
 
     try {
       setDeleting(true);
-      const response = await fetch(
-        `/api/address-books/main-accounts/${mainAccountId}/derived-accounts/delete-batch`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            accountIds: [account.id],
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, error } = await deleteDerivedBatch(mainAccountId, [account.id]);
+      if (success) {
         alert('派生账号已删除');
         onRefresh();
       } else {
-        alert(data.error || '删除失败，请稍后重试');
+        alert(error || '删除失败，请稍后重试');
       }
     } catch (error) {
       alert('删除失败，请稍后重试');
@@ -133,3 +119,4 @@ export default function DerivedAccountCard({ account, mainAccountId, onRefresh, 
     </>
   );
 }
+import { deleteDerivedBatch } from '@/lib/addressBooksService';

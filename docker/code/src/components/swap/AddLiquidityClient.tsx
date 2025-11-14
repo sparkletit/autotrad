@@ -5,7 +5,10 @@ import Header from '@/components/Header';
 import DeFiNavigation from '@/components/swap/DeFiNavigation';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
 import { fetchCustomTokens } from '@/lib/addressService';
+import apiService from '@/lib/apiService';
+import { getPair, addLiquidity } from '@/lib/swapService';
 import { parseUnits, formatUnits } from 'viem';
+import { useNetwork } from '@/lib/networkStore';
 
 interface CustomToken {
   symbol: string;
@@ -16,7 +19,7 @@ interface CustomToken {
 const AddLiquidityClient: React.FC = () => {
   const [fromAddress, setFromAddress] = useState('');
   const [toAddress, setToAddress] = useState('');
-  const [selectedNetwork, setSelectedNetwork] = useState('fork');
+  const net = useNetwork();
   const [tokens, setTokens] = useState<CustomToken[]>([]);
 
   const [tokenA, setTokenA] = useState('');
@@ -49,19 +52,14 @@ const AddLiquidityClient: React.FC = () => {
       setPairInfo(null);
       if (!tokenA || !tokenB) return;
       try {
-        const resp = await fetch('/api/swap/get-pair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tokenA, tokenB, network: selectedNetwork }),
-        });
-        const data = await resp.json();
-        if (data.success && data.data?.pairAddress) {
+        const { success, data } = await getPair({ tokenA, tokenB, network: net });
+        if (success && (data as any)?.pairAddress) {
           setPairInfo({
-            pairAddress: data.data.pairAddress,
-            token0: data.data.token0,
-            token1: data.data.token1,
-            reserve0: data.data.reserve0,
-            reserve1: data.data.reserve1,
+            pairAddress: (data as any).pairAddress,
+            token0: (data as any).token0,
+            token1: (data as any).token1,
+            reserve0: (data as any).reserve0,
+            reserve1: (data as any).reserve1,
           });
         }
       } catch (e) {
@@ -69,7 +67,7 @@ const AddLiquidityClient: React.FC = () => {
       }
     };
     fetchPair();
-  }, [tokenA, tokenB, selectedNetwork]);
+  }, [tokenA, tokenB, net]);
 
   // 失焦时联动：依据当前储备比例在 onBlur 计算另一侧数量（按各自 decimals 处理）
   const calcOtherOnBlur = (inputStr: string, isA: boolean): string | null => {
@@ -131,21 +129,16 @@ const AddLiquidityClient: React.FC = () => {
         amountAMin: amountAMin || undefined,
         amountBMin: amountBMin || undefined,
         slippage,
-        network: selectedNetwork,
+        network: net,
       };
 
-      const resp = await fetch('/api/swap/add-liquidity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await resp.json();
-      if (data.success) {
-        setSuccess(data.data?.message || '提交成功');
-        setTxHash(data.data?.txHash || '');
+      const { success, data, error } = await addLiquidity(body);
+      if (success) {
+        setSuccess(((data as any)?.message) || '提交成功');
+        setTxHash(((data as any)?.txHash) || '');
       } else {
-        setError(data.error || '提交失败');
-        setTxHash(data.data?.txHash || '');
+        setError(error || '提交失败');
+        setTxHash(((data as any)?.txHash) || '');
       }
     } catch (e: any) {
       setError(e?.message || '提交失败');
@@ -181,15 +174,7 @@ const AddLiquidityClient: React.FC = () => {
                     <UnifiedAddressSelector value={toAddress} onChange={setToAddress} placeholder="选择或输入接收地址..." />
                   </div>
                 </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">网络</label>
-                  <select value={selectedNetwork} onChange={(e) => setSelectedNetwork(e.target.value)} className="px-3 py-2 border border-gray-300 rounded text-sm text-gray-900">
-                    <option value="fork">Fork (本地)</option>
-                    <option value="bsc">BSC</option>
-                    <option value="ethereum">Ethereum</option>
-                    <option value="polygon">Polygon</option>
-                  </select>
-                </div>
+                {/* 网络选择已统一到 Header */}
               </div>
 
               {/* Token 选择与数量 */}

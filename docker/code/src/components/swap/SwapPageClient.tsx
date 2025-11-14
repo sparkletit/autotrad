@@ -5,6 +5,8 @@ import Header from '@/components/Header';
 import UnifiedAddressSelector from '@/components/common/UnifiedAddressSelector';
 import DeFiNavigation from '@/components/swap/DeFiNavigation';
 import { fetchCustomTokens, fetchTokenBalances } from '@/lib/addressService';
+import apiService from '@/lib/apiService';
+import { useNetwork } from '@/lib/networkStore';
 import { formatBalance } from '@/lib/utils';
 
 interface Account {
@@ -41,10 +43,13 @@ const SwapPageClient: React.FC = () => {
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [fromAddress, setFromAddress] = useState('');
   const [toAddress, setToAddress] = useState('');
-  const [selectedNetwork, setSelectedNetwork] = useState('fork');
+  const net = useNetwork();
   const [pairAddress, setPairAddress] = useState('');
   const [pairReserves, setPairReserves] = useState<PairReserves | null>(null);
   const [loadingReserves, setLoadingReserves] = useState(false);
+  const [poolMode, setPoolMode] = useState<'manual' | 'auto'>('manual');
+  const [tokenAForAuto, setTokenAForAuto] = useState('');
+  const [tokenBForAuto, setTokenBForAuto] = useState('');
   const [gasMode, setGasMode] = useState<'auto' | '500000' | '1000000'>('auto');
   const [customGas, setCustomGas] = useState('');
   const [slippageMode, setSlippageMode] = useState<'auto' | '0.5' | '5' | '10' | '30'>('auto');
@@ -142,30 +147,46 @@ const SwapPageClient: React.FC = () => {
       // 清除旧的储备数据
       setPairReserves(null);
       
-      const response = await fetch('/api/swap/get-reserves', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pairAddress,
-          network: selectedNetwork,
-        }),
-        // 禁用浏览器缓存
-        cache: 'no-store',
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setPairReserves(data.data);
+      const { success, data, error } = await apiService.post('/api/swap/get-reserves', { pairAddress, network: net });
+      if (success) {
+        setPairReserves((data as any));
         setSuccess('储备查询成功');
         setTimeout(() => setSuccess(''), 2000);
       } else {
-        setError(data.error || '查询储备失败');
+        setError(error || '查询储备失败');
         // 保持储备状态为 null，不显示旧的数据
         setPairReserves(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '查询储备失败');
+      setPairReserves(null);
+    } finally {
+      setLoadingReserves(false);
+    }
+  };
+
+  const handleAutoFindPair = async () => {
+    if (!tokenAForAuto || !tokenBForAuto) {
+      setError('请选择两个代币');
+      return;
+    }
+    try {
+      setLoadingReserves(true);
+      setError('');
+      setPairReserves(null);
+      const { success, data, error } = await apiService.post('/api/swap/get-pair', { tokenA: tokenAForAuto, tokenB: tokenBForAuto, network: net });
+      if (success) {
+        const payload = data as any;
+        if (payload?.pairAddress) setPairAddress(payload.pairAddress);
+        if (payload?.reserve0) setPairReserves(payload as PairReserves);
+        setSuccess('已自动查找交易池');
+        setTimeout(() => setSuccess(''), 2000);
+      } else {
+        setError(error || '自动查找失败');
+        setPairReserves(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '自动查找失败');
       setPairReserves(null);
     } finally {
       setLoadingReserves(false);
@@ -193,28 +214,17 @@ const SwapPageClient: React.FC = () => {
       setSuccess('');
       setTxHash('');
 
-      const response = await fetch('/api/swap/wrap-wbnb', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account: fromAddress,
-          amount: wrapAmount,
-          network: selectedNetwork,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
+      const { success, data, error } = await apiService.post('/api/swap/wrap-wbnb', { account: fromAddress, amount: wrapAmount, network: selectedNetwork });
+      if (success) {
         setSuccess(`成功将 ${wrapAmount} BNB 包装为 WBNB`);
-        setTxHash(data.data.txHash);
+        setTxHash((data as any)?.txHash);
         setWrapAmount('');
         setShowWrapModal(false);
         setTimeout(() => {
           if (fromAddress) fetchTokenBalances(fromAddress);
         }, 1000);
       } else {
-        setError(data.error || '包装失败');
+        setError(error || '包装失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '包装失败');
@@ -238,18 +248,12 @@ const SwapPageClient: React.FC = () => {
       setError('');
       setSuccess('');
 
-      const response = await fetch('/api/custom-tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          symbol: newTokenSymbol.toUpperCase(),
-          address: newTokenAddress,
-          decimals: parseInt(newTokenDecimals),
-        }),
+      const { success, error } = await apiService.post('/api/custom-tokens', {
+        symbol: newTokenSymbol.toUpperCase(),
+        address: newTokenAddress,
+        decimals: parseInt(newTokenDecimals),
       });
-
-      const data = await response.json();
-      if (data.success) {
+      if (success) {
         setSuccess(`成功添加代币 ${newTokenSymbol.toUpperCase()}`);
         setNewTokenSymbol('');
         setNewTokenAddress('');
@@ -262,7 +266,7 @@ const SwapPageClient: React.FC = () => {
           decimals: t.decimals,
         })));
       } else {
-        setError(data.error || '添加失败');
+        setError(error || '添加失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '添加失败');
@@ -295,29 +299,23 @@ const SwapPageClient: React.FC = () => {
       setSuccess('');
       setTxHash('');
 
-      const response = await fetch('/api/swap/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account: fromAddress,
-          toAddress: toAddress || fromAddress,
-          pairAddress,
-          tokenIn: selectedTokenIn,
-          tokenOut: selectedTokenOut,
-          amountIn,
-          gasLimit: getGasLimit(),
-          slippage: getSlippage(),
-          network: selectedNetwork,
-        }),
+      const { success, data, error } = await apiService.post('/api/swap/execute', {
+        account: fromAddress,
+        toAddress: toAddress || fromAddress,
+        pairAddress,
+        tokenIn: selectedTokenIn,
+        tokenOut: selectedTokenOut,
+        amountIn,
+        gasLimit: getGasLimit(),
+        slippage: getSlippage(),
+        network: selectedNetwork,
       });
 
-      const data = await response.json();
-
-      if (data.success) {
+      if (success) {
         setSuccess('交换成功');
-        setTxHash(data.data.txHash);
+        setTxHash((data as any)?.txHash);
         setAmountIn('');
-        setAmountOut(data.data.amountOut || '');
+        setAmountOut((data as any)?.amountOut || '');
         setTimeout(async () => {
           if (fromAddress) {
             const balances = await fetchTokenBalances(fromAddress);
@@ -325,7 +323,7 @@ const SwapPageClient: React.FC = () => {
           }
         }, 1000);
       } else {
-        setError(data.error || '交换失败');
+        setError(error || '交换失败');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '交换失败');
@@ -374,21 +372,59 @@ const SwapPageClient: React.FC = () => {
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">第一步：交易池地址</h2>
                 <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">从地址别名中选择或输入地址</label>
-                    <UnifiedAddressSelector
-                      value={pairAddress}
-                      onChange={setPairAddress}
-                      placeholder="搜索交易池地址..."
-                    />
+                  <div className="flex gap-2 mb-2">
+                    <button onClick={() => setPoolMode('manual')} className={`px-3 py-1 rounded ${poolMode === 'manual' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>手动指定</button>
+                    <button onClick={() => setPoolMode('auto')} className={`px-3 py-1 rounded ${poolMode === 'auto' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>自动查找</button>
                   </div>
-                  <button
-                    onClick={handleQueryReserves}
-                    disabled={loadingReserves || !isPairAddressValid}
-                    className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
-                  >
-                    {loadingReserves ? '查询中...' : '查询储备'}
-                  </button>
+                  {poolMode === 'manual' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-900 mb-2">从地址别名中选择或输入地址</label>
+                        <UnifiedAddressSelector
+                          value={pairAddress}
+                          onChange={setPairAddress}
+                          placeholder="搜索交易池地址..."
+                        />
+                      </div>
+                      <button
+                        onClick={handleQueryReserves}
+                        disabled={loadingReserves || !isPairAddressValid}
+                        className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+                      >
+                        {loadingReserves ? '查询中...' : '查询储备'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-900 mb-2">代币 A</label>
+                          <select value={tokenAForAuto} onChange={(e) => setTokenAForAuto(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- 选择代币 --</option>
+                            {uniqueTokens.map((token) => (
+                              <option key={token.address} value={token.address}>{token.symbol} ({token.address.slice(0, 6)}...)</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-900 mb-2">代币 B</label>
+                          <select value={tokenBForAuto} onChange={(e) => setTokenBForAuto(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- 选择代币 --</option>
+                            {uniqueTokens.map((token) => (
+                              <option key={token.address} value={token.address}>{token.symbol} ({token.address.slice(0, 6)}...)</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleAutoFindPair}
+                        disabled={loadingReserves || !tokenAForAuto || !tokenBForAuto}
+                        className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+                      >
+                        {loadingReserves ? '查询中...' : '自动查找交易池'}
+                      </button>
+                    </>
+                  )}
                 </div>
                 {pairReserves && (
                   <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
