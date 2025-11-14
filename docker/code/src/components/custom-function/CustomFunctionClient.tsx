@@ -48,6 +48,24 @@ const CustomFunctionPage: React.FC = () => {
   const [abiContent, setAbiContent] = useState('');
   const [parsedABI, setParsedABI] = useState<ABIFunction[]>([]);
   const [selectedFunction, setSelectedFunction] = useState('');
+  const [chainId, setChainId] = useState<string>('1'); // 默认以太坊主网
+
+  // 获取链信息
+  const fetchChainInfo = async () => {
+    try {
+      const { success, data } = await apiService.get('/api/fork/chain-info?network=fork');
+      if (success && data) {
+        setChainId(data.chainId.toString());
+      } else {
+        // 如果无法获取链信息，默认使用以太坊主网
+        setChainId('1');
+      }
+    } catch (error) {
+      console.error('获取链信息失败:', error);
+      // 出错时默认使用以太坊主网
+      setChainId('1');
+    }
+  };
   const [functionParams, setFunctionParams] = useState<any>({});
   const [description, setDescription] = useState('');
   const [gasLimit, setGasLimit] = useState('auto');
@@ -65,6 +83,8 @@ const CustomFunctionPage: React.FC = () => {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<FunctionTemplate | null>(null);
+  const [abiLoading, setAbiLoading] = useState(false);
+  const [abiFetchError, setAbiFetchError] = useState('');
 
   // 标记组件已挂载到客户端
   useEffect(() => {
@@ -77,6 +97,7 @@ const CustomFunctionPage: React.FC = () => {
       setAccounts(allAccounts);
     };
     loadAccounts();
+    fetchChainInfo(); // 获取链信息
   }, []);
 
   // 页面加载时获取模板列表
@@ -120,6 +141,42 @@ const CustomFunctionPage: React.FC = () => {
       setPendingTemplate(null);
     }
   }, [parsedABI, pendingTemplate]);
+
+  const fetchAbi = async (silent: boolean = false) => {
+    if (!contractAddress || !/^0x[a-fA-F0-9]{40}$/.test(contractAddress)) return;
+    try {
+      if (!silent) setError('');
+      setAbiFetchError('');
+      setAbiLoading(true);
+      const { success, data, error } = await apiService.get(`/api/abi/${contractAddress}?chainId=${chainId}`);
+      if (!success) {
+        setAbiFetchError(error || '获取ABI失败');
+        if (!silent) setError(error || '获取ABI失败');
+        return;
+      }
+      const abiStr = (data as any)?.abi || '';
+      let pretty = abiStr;
+      try {
+        pretty = JSON.stringify(JSON.parse(abiStr), null, 2);
+      } catch {}
+      setAbiContent(pretty);
+      setSuccess('ABI已自动填充');
+    } catch (e: any) {
+      setAbiFetchError(e.message || '获取ABI失败');
+      if (!silent) setError(e.message || '获取ABI失败');
+    } finally {
+      setAbiLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (contractAddress && /^0x[a-fA-F0-9]{40}$/.test(contractAddress)) {
+      const t = setTimeout(() => {
+        if (!abiContent) fetchAbi(true);
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [contractAddress, abiContent]);
 
 
 
@@ -398,11 +455,29 @@ const CustomFunctionPage: React.FC = () => {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     合约地址 *
                   </label>
-                  <UnifiedAddressSelector
-                    value={contractAddress}
-                    onChange={setContractAddress}
-                    placeholder="搜索或选择合约地址..."
-                  />
+                  <div className="flex items-center space-x-2">
+                    <div className="flex-1">
+                      <UnifiedAddressSelector
+                        value={contractAddress}
+                        onChange={setContractAddress}
+                        placeholder="搜索或选择合约地址..."
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fetchAbi(false)}
+                      disabled={!contractAddress || abiLoading}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm disabled:opacity-50"
+                    >
+                      ABI
+                    </button>
+                  </div>
+                  {abiLoading && (
+                    <p className="text-xs text-gray-600 mt-1">正在获取ABI...</p>
+                  )}
+                  {abiFetchError && (
+                    <p className="text-xs text-red-600 mt-1">{abiFetchError}</p>
+                  )}
                 </div>
 
                 {/* ABI内容 */}

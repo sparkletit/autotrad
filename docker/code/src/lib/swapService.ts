@@ -54,3 +54,17 @@ export async function executeSwap(body: {
   return apiService.post('/api/swap/execute', body);
 }
 
+export async function executeSwapV3(body: {
+  account: string;
+  toAddress?: string;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+  fee?: number;
+  slippage?: string | 'auto';
+  sqrtPriceLimitX96?: string;
+  deadlineSeconds?: number;
+  network: string;
+}) {
+  return apiService.post('/api/swap/execute-v3', body);
+}

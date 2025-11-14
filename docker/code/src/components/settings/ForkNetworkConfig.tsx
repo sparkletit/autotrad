@@ -553,6 +553,16 @@ ${(data as any).command}
                       placeholder="推进到目标时间戳（秒）"
                       className="flex-1 px-3 py-2 border border-green-300 rounded bg-white text-sm"
                     />
+                    <input
+                      type="datetime-local"
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) return;
+                        const t = Math.floor(new Date(v).getTime() / 1000);
+                        setReachTimestamp(String(t));
+                      }}
+                      className="px-3 py-2 border border-green-300 rounded bg-white text-sm"
+                    />
                     <button
                       onClick={handleReachTime}
                       disabled={timeLoading}
@@ -568,6 +578,16 @@ ${(data as any).command}
                       onChange={(e) => setNextTimestamp(e.target.value)}
                       placeholder="设置下个区块时间戳（秒）"
                       className="flex-1 px-3 py-2 border border-green-300 rounded bg-white text-sm"
+                    />
+                    <input
+                      type="datetime-local"
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) return;
+                        const t = Math.floor(new Date(v).getTime() / 1000);
+                        setNextTimestamp(String(t));
+                      }}
+                      className="px-3 py-2 border border-green-300 rounded bg-white text-sm"
                     />
                     <button
                       onClick={handleSetNextTimestamp}

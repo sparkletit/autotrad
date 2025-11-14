@@ -5,15 +5,16 @@ services:
     image: 2s201l9ub5m6l2.xuanyuan.run/node:20
     container_name: web3_trad_anvil_api
     ports:
-      - "3000:3000"  # Anvil API 管理端口
+      - "3333:3000"  # Anvil API 管理端口
       - "8545:8545"  # Anvil RPC 端口
     volumes:
       - ./docker/scripts/anvil-api.js:/app/anvil-api.js
       - ./docker/scripts/install-foundry.sh:/app/install-foundry.sh
       - ./docker/data/anvil-states:/app/anvil-states  # 状态文件目录
       - foundry-cache:/root/.foundry  # 持久化 Foundry 安装，避免每次重启都重新安装
+      - ./docker/logs:/app/logs
     working_dir: /app
-    command: sh -c "chmod +x /app/install-foundry.sh && /app/install-foundry.sh && node anvil-api.js"
+    command: sh -c "chmod +x /app/install-foundry.sh && /app/install-foundry.sh && mkdir -p /app/logs && node anvil-api.js 2>&1 | tee -a /app/logs/anvil-api-run.log"
     networks:
       - web3_network
     restart: unless-stopped

@@ -47,13 +47,14 @@ const SwapPageClient: React.FC = () => {
   const [pairAddress, setPairAddress] = useState('');
   const [pairReserves, setPairReserves] = useState<PairReserves | null>(null);
   const [loadingReserves, setLoadingReserves] = useState(false);
-  const [poolMode, setPoolMode] = useState<'manual' | 'auto'>('manual');
-  const [tokenAForAuto, setTokenAForAuto] = useState('');
-  const [tokenBForAuto, setTokenBForAuto] = useState('');
+  const [protocolVersion, setProtocolVersion] = useState<'v2' | 'v3'>('v2');
   const [gasMode, setGasMode] = useState<'auto' | '500000' | '1000000'>('auto');
   const [customGas, setCustomGas] = useState('');
   const [slippageMode, setSlippageMode] = useState<'auto' | '0.5' | '5' | '10' | '30'>('auto');
   const [customSlippage, setCustomSlippage] = useState('');
+  const [v3Fee, setV3Fee] = useState('3000');
+  const [v3SqrtPriceLimitX96, setV3SqrtPriceLimitX96] = useState('0');
+  const [v3DeadlineSeconds, setV3DeadlineSeconds] = useState('600');
   const [selectedTokenIn, setSelectedTokenIn] = useState('');
   const [selectedTokenOut, setSelectedTokenOut] = useState('');
   const [amountIn, setAmountIn] = useState('');
@@ -68,8 +69,6 @@ const SwapPageClient: React.FC = () => {
   const [newTokenSymbol, setNewTokenSymbol] = useState('');
   const [newTokenAddress, setNewTokenAddress] = useState('');
   const [newTokenDecimals, setNewTokenDecimals] = useState('18');
-
-  const isPairAddressValid = pairAddress.match(/^0x[a-fA-F0-9]{40}$/);
   
   const allTokens = [
     { symbol: 'BNB', address: '0x0000000000000000000000000000000000000000', decimals: 18 },
@@ -135,63 +134,26 @@ const SwapPageClient: React.FC = () => {
     }
   }, [fromAddress]);
 
-  const handleQueryReserves = async () => {
-    if (!isPairAddressValid) {
-      setError('请输入有效的交易池地址');
-      return;
-    }
-
-    try {
-      setLoadingReserves(true);
-      setError('');
-      // 清除旧的储备数据
-      setPairReserves(null);
-      
-      const { success, data, error } = await apiService.post('/api/swap/get-reserves', { pairAddress, network: net });
-      if (success) {
-        setPairReserves((data as any));
-        setSuccess('储备查询成功');
-        setTimeout(() => setSuccess(''), 2000);
-      } else {
-        setError(error || '查询储备失败');
-        // 保持储备状态为 null，不显示旧的数据
+  useEffect(() => {
+    const autoPair = async () => {
+      if (protocolVersion !== 'v2') return;
+      if (!selectedTokenIn || !selectedTokenOut) return;
+      try {
+        setLoadingReserves(true);
+        setError('');
         setPairReserves(null);
+        const { success, data } = await apiService.post('/api/swap/get-pair', { tokenA: selectedTokenIn, tokenB: selectedTokenOut, network: net });
+        if (success) {
+          const payload = data as any;
+          if (payload?.pairAddress) setPairAddress(payload.pairAddress);
+          if (payload?.reserve0) setPairReserves(payload as PairReserves);
+        }
+      } finally {
+        setLoadingReserves(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '查询储备失败');
-      setPairReserves(null);
-    } finally {
-      setLoadingReserves(false);
-    }
-  };
-
-  const handleAutoFindPair = async () => {
-    if (!tokenAForAuto || !tokenBForAuto) {
-      setError('请选择两个代币');
-      return;
-    }
-    try {
-      setLoadingReserves(true);
-      setError('');
-      setPairReserves(null);
-      const { success, data, error } = await apiService.post('/api/swap/get-pair', { tokenA: tokenAForAuto, tokenB: tokenBForAuto, network: net });
-      if (success) {
-        const payload = data as any;
-        if (payload?.pairAddress) setPairAddress(payload.pairAddress);
-        if (payload?.reserve0) setPairReserves(payload as PairReserves);
-        setSuccess('已自动查找交易池');
-        setTimeout(() => setSuccess(''), 2000);
-      } else {
-        setError(error || '自动查找失败');
-        setPairReserves(null);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '自动查找失败');
-      setPairReserves(null);
-    } finally {
-      setLoadingReserves(false);
-    }
-  };
+    };
+    autoPair();
+  }, [selectedTokenIn, selectedTokenOut, protocolVersion, net]);
 
   const handleClickWrapBNBButton = () => {
     if (!fromAddress) {
@@ -280,10 +242,6 @@ const SwapPageClient: React.FC = () => {
       setError('请先选择账户');
       return;
     }
-    if (!isPairAddressValid) {
-      setError('请输入有效的交易池地址');
-      return;
-    }
     if (!selectedTokenIn || !selectedTokenOut) {
       setError('请选择输入和输出代币');
       return;
@@ -298,32 +256,64 @@ const SwapPageClient: React.FC = () => {
       setError('');
       setSuccess('');
       setTxHash('');
-
-      const { success, data, error } = await apiService.post('/api/swap/execute', {
-        account: fromAddress,
-        toAddress: toAddress || fromAddress,
-        pairAddress,
-        tokenIn: selectedTokenIn,
-        tokenOut: selectedTokenOut,
-        amountIn,
-        gasLimit: getGasLimit(),
-        slippage: getSlippage(),
-        network: net,
-      });
-
-      if (success) {
-        setSuccess('交换成功');
-        setTxHash((data as any)?.txHash);
-        setAmountIn('');
-        setAmountOut((data as any)?.amountOut || '');
-        setTimeout(async () => {
-          if (fromAddress) {
-            const balances = await fetchTokenBalances(fromAddress);
-            setTokenBalances(balances);
-          }
-        }, 1000);
+      if (protocolVersion === 'v2') {
+        if (!pairAddress) {
+          setError('请输入有效的交易池地址');
+          setLoading(false);
+          return;
+        }
+        const { success, data, error } = await apiService.post('/api/swap/execute', {
+          account: fromAddress,
+          toAddress: toAddress || fromAddress,
+          pairAddress,
+          tokenIn: selectedTokenIn,
+          tokenOut: selectedTokenOut,
+          amountIn,
+          gasLimit: getGasLimit(),
+          slippage: getSlippage(),
+          network: net,
+        });
+        if (success) {
+          setSuccess('交换成功');
+          setTxHash((data as any)?.txHash);
+          setAmountIn('');
+          setAmountOut((data as any)?.amountOut || '');
+          setTimeout(async () => {
+            if (fromAddress) {
+              const balances = await fetchTokenBalances(fromAddress);
+              setTokenBalances(balances);
+            }
+          }, 1000);
+        } else {
+          setError(error || '交换失败');
+        }
       } else {
-        setError(error || '交换失败');
+        const { success, data, error } = await apiService.post('/api/swap/execute-v3', {
+          account: fromAddress,
+          toAddress: toAddress || fromAddress,
+          tokenIn: selectedTokenIn,
+          tokenOut: selectedTokenOut,
+          amountIn,
+          fee: parseInt(v3Fee, 10),
+          slippage: getSlippage(),
+          sqrtPriceLimitX96: v3SqrtPriceLimitX96,
+          deadlineSeconds: parseInt(v3DeadlineSeconds, 10),
+          network: net,
+        });
+        if (success) {
+          setSuccess('交换成功');
+          setTxHash((data as any)?.txHash);
+          setAmountIn('');
+          setAmountOut((data as any)?.expectedOut || '');
+          setTimeout(async () => {
+            if (fromAddress) {
+              const balances = await fetchTokenBalances(fromAddress);
+              setTokenBalances(balances);
+            }
+          }, 1000);
+        } else {
+          setError(error || '交换失败');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '交换失败');
@@ -368,99 +358,12 @@ const SwapPageClient: React.FC = () => {
                 </div>
               </div>
 
-              {/* 第一步：交易池地址 */}
               <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">第一步：交易池地址</h2>
-                <div className="space-y-3">
-                  <div className="flex gap-2 mb-2">
-                    <button onClick={() => setPoolMode('manual')} className={`px-3 py-1 rounded ${poolMode === 'manual' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>手动指定</button>
-                    <button onClick={() => setPoolMode('auto')} className={`px-3 py-1 rounded ${poolMode === 'auto' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>自动查找</button>
-                  </div>
-                  {poolMode === 'manual' ? (
-                    <>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">从地址别名中选择或输入地址</label>
-                        <UnifiedAddressSelector
-                          value={pairAddress}
-                          onChange={setPairAddress}
-                          placeholder="搜索交易池地址..."
-                        />
-                      </div>
-                      <button
-                        onClick={handleQueryReserves}
-                        disabled={loadingReserves || !isPairAddressValid}
-                        className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
-                      >
-                        {loadingReserves ? '查询中...' : '查询储备'}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-900 mb-2">代币 A</label>
-                          <select value={tokenAForAuto} onChange={(e) => setTokenAForAuto(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">-- 选择代币 --</option>
-                            {uniqueTokens.map((token) => (
-                              <option key={token.address} value={token.address}>{token.symbol} ({token.address.slice(0, 6)}...)</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-900 mb-2">代币 B</label>
-                          <select value={tokenBForAuto} onChange={(e) => setTokenBForAuto(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">-- 选择代币 --</option>
-                            {uniqueTokens.map((token) => (
-                              <option key={token.address} value={token.address}>{token.symbol} ({token.address.slice(0, 6)}...)</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleAutoFindPair}
-                        disabled={loadingReserves || !tokenAForAuto || !tokenBForAuto}
-                        className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
-                      >
-                        {loadingReserves ? '查询中...' : '自动查找交易池'}
-                      </button>
-                    </>
-                  )}
+                <h2 className="text-xl font-bold text-gray-900 mb-4">协议版本</h2>
+                <div className="flex gap-2 mb-2">
+                  <button onClick={() => setProtocolVersion('v2')} className={`px-3 py-1 rounded ${protocolVersion === 'v2' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>PancakeSwap V2</button>
+                  <button onClick={() => setProtocolVersion('v3')} className={`px-3 py-1 rounded ${protocolVersion === 'v3' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>PancakeSwap V3</button>
                 </div>
-                {pairReserves && (
-                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm font-semibold text-blue-900 mb-2">储备信息：</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-blue-600">Token0:</span>
-                        <div className="font-mono text-blue-900">
-                          <div className="text-xs">{pairReserves.token0}</div>
-                          <div className="text-green-700 font-semibold">{getTokenSymbol(pairReserves.token0)}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-blue-600">Reserve0:</span>
-                        <div className="font-mono text-blue-900">
-                          <div className="text-xs text-gray-600">{pairReserves.reserve0}</div>
-                          <div className="text-green-700 font-semibold">{formatBalance(pairReserves.reserve0, getTokenDecimals(pairReserves.token0))}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-blue-600">Token1:</span>
-                        <div className="font-mono text-blue-900">
-                          <div className="text-xs">{pairReserves.token1}</div>
-                          <div className="text-green-700 font-semibold">{getTokenSymbol(pairReserves.token1)}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-blue-600">Reserve1:</span>
-                        <div className="font-mono text-blue-900">
-                          <div className="text-xs text-gray-600">{pairReserves.reserve1}</div>
-                          <div className="text-green-700 font-semibold">{formatBalance(pairReserves.reserve1, getTokenDecimals(pairReserves.token1))}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* 第二步：Gas 和滑点 */}
@@ -488,6 +391,28 @@ const SwapPageClient: React.FC = () => {
                     <input type="number" value={customSlippage} onChange={(e) => setCustomSlippage(e.target.value)} placeholder="或输入自定义滑点" step="0.1" className="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500" />
                   </div>
                 </div>
+                {protocolVersion === 'v3' && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">V3 费率</label>
+                      <select value={v3Fee} onChange={(e) => setV3Fee(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="100">0.01% (100)</option>
+                        <option value="500">0.05% (500)</option>
+                        <option value="2500">0.25% (2500)</option>
+                        <option value="3000">0.30% (3000)</option>
+                        <option value="10000">1% (10000)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">sqrtPriceLimitX96</label>
+                      <input type="text" value={v3SqrtPriceLimitX96} onChange={(e) => setV3SqrtPriceLimitX96(e.target.value)} placeholder="0 或限制价格" className="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">截止时间(秒)</label>
+                      <input type="number" value={v3DeadlineSeconds} onChange={(e) => setV3DeadlineSeconds(e.target.value)} min="1" className="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 第三步：代币选择 */}
@@ -526,7 +451,7 @@ const SwapPageClient: React.FC = () => {
               </div>
 
               {/* 第四步：执行交换 */}
-              <button onClick={handleSwap} disabled={loading || !fromAddress || !isPairAddressValid || !selectedTokenIn || !selectedTokenOut || !amountIn} className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors text-lg">
+              <button onClick={handleSwap} disabled={loading || !fromAddress || !selectedTokenIn || !selectedTokenOut || !amountIn || (protocolVersion === 'v2' && !pairAddress)} className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors text-lg">
                 {loading ? '交换中...' : '确认交换'}
               </button>
             </div>

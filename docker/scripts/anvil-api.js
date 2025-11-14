@@ -10,6 +10,7 @@ const ANVIL_EXECUTABLE = '/root/.foundry/bin/anvil';
 const ANVIL_RPC_URL = 'http://localhost:8545';
 const API_PORT = 3000;
 const STATES_DIR = '/app/anvil-states';
+const LOG_DIR = '/app/logs';
 
 let anvilProcess = null;
 let currentConfig = null;
@@ -18,6 +19,15 @@ let currentConfig = null;
 async function ensureStatesDir() {
   try {
     await mkdir(STATES_DIR, { recursive: true });
+  } catch (err) {
+    // 目录可能已存在，忽略错误
+  }
+}
+
+// 确保日志目录存在
+async function ensureLogDir() {
+  try {
+    await mkdir(LOG_DIR, { recursive: true });
   } catch (err) {
     // 目录可能已存在，忽略错误
   }
@@ -404,6 +414,7 @@ const server = http.createServer(async (req, res) => {
 // 初始化
 async function init() {
   await ensureStatesDir();
+  await ensureLogDir();
   console.log('Anvil API 服务初始化完成');
 }
 
