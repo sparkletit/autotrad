@@ -214,7 +214,7 @@ const SwapPageClient: React.FC = () => {
       setSuccess('');
       setTxHash('');
 
-      const { success, data, error } = await apiService.post('/api/swap/wrap-wbnb', { account: fromAddress, amount: wrapAmount, network: selectedNetwork });
+      const { success, data, error } = await apiService.post('/api/swap/wrap-wbnb', { account: fromAddress, amount: wrapAmount, network: net });
       if (success) {
         setSuccess(`成功将 ${wrapAmount} BNB 包装为 WBNB`);
         setTxHash((data as any)?.txHash);
@@ -308,7 +308,7 @@ const SwapPageClient: React.FC = () => {
         amountIn,
         gasLimit: getGasLimit(),
         slippage: getSlippage(),
-        network: selectedNetwork,
+        network: net,
       });
 
       if (success) {

@@ -362,7 +362,7 @@ const TradePageClient: React.FC = () => {
         if (payload.status === 'confirmed') {
           setSuccess(`✅ 交易已确认！\n\n交易哈希: ${hash}`);
           // 交易确认后刷新余额
-          fetchTokenBalances(fromAddress, (customTokens && customTokens.length > 0) ? customTokens : undefined, selectedNetwork)
+        fetchTokenBalances(fromAddress, (customTokens && customTokens.length > 0) ? customTokens : undefined, net)
             .then((balances: TokenBalance[]) => {
               setTokenBalances(balances);
             })
