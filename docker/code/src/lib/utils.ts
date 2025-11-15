@@ -176,21 +176,32 @@ export const formatBalance = (balance: string | bigint | number, decimals: numbe
   try {
     const bigBalance = typeof balance === 'string' ? BigInt(balance) : BigInt(balance);
     const divisor = BigInt(10 ** decimals);
-    const wholePart = bigBalance / divisor;
-    const fractionalPart = bigBalance % divisor;
+    const isNeg = bigBalance < BigInt(0);
+    const abs = isNeg ? -bigBalance : bigBalance;
+    const wholePart = abs / divisor;
+    const fractionalPart = abs % divisor;
 
-    // 构造小数部分，最多5位
+    if (wholePart === BigInt(0)) {
+      const fracFull = fractionalPart.toString().padStart(decimals, '0');
+      const firstNonZero = fracFull.search(/[1-9]/);
+      if (firstNonZero === -1) return '0';
+      const zerosCount = firstNonZero;
+      const sig = fracFull.slice(firstNonZero, firstNonZero + 4) || '0';
+      return `${isNeg ? '-' : ''}0.{${zerosCount}}${sig}`;
+    }
+
     let fractionalStr = fractionalPart.toString().padStart(decimals, '0');
-    fractionalStr = fractionalStr.substring(0, 5); // 只保留5位
-    fractionalStr = fractionalStr.replace(/0+$/, ''); // 移除尾部零
+    fractionalStr = fractionalStr.substring(0, 5);
+    fractionalStr = fractionalStr.replace(/0+$/, '');
 
     let result = wholePart.toString();
     if (fractionalStr) {
       result += '.' + fractionalStr;
     }
 
-    // 使用 formatNumber 进行千分位分隔
-    return formatNumber(parseFloat(result), 5);
+    const num = parseFloat(result);
+    const withSep = formatNumber(num, 5);
+    return isNeg ? `-${withSep}` : withSep;
   } catch (err) {
     console.error('formatBalance error:', err);
     return '0';

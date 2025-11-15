@@ -149,9 +149,11 @@ export function parseBlockchainError(error: any): string {
 export function getRpcUrl(network: string): string {
   const rpcUrls: Record<string, string> = {
     fork: process.env.ANVIL_RPC_URL || 'http://anvil-api:8545',
-    ethereum: 'https://mainnet.infura.io/v3/YOUR_KEY',
+    ethereum: process.env.ALCHEMY_API_KEY ? `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}` : 'https://mainnet.infura.io/v3/YOUR_KEY',
     bsc: 'https://bsc-dataseed1.bnbchain.org',
     polygon: 'https://polygon-rpc.com',
+    arbitrum: process.env.ALCHEMY_API_KEY ? `https://arb-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}` : 'https://arb1.arbitrum.io/rpc',
+    optimism: process.env.ALCHEMY_API_KEY ? `https://opt-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}` : 'https://mainnet.optimism.io',
   };
   const key = (network || 'fork').toLowerCase();
   return rpcUrls[key] || rpcUrls.fork;

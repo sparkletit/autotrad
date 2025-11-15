@@ -51,6 +51,9 @@ const Header: React.FC<HeaderProps> = ({ title = "Web3 交易平台" }) => {
             <a href="/address-books" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
               地址本
             </a>
+            <a href="/import-tokens" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
+              代币分析
+            </a>
             <a href="/settings" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
               设置
             </a>

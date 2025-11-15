@@ -1,76 +1,83 @@
-import React from 'react';
-import { createPortal } from 'react-dom';
-
-export interface ModalAction {
-  label: string;
-  onClick: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
-  disabled?: boolean;
-}
+import React, { useState, useEffect } from 'react';
 
 interface ModalProps {
   isOpen: boolean;
-  title: string;
   onClose: () => void;
+  title: string;
   children: React.ReactNode;
-  actions?: ModalAction[];
-  maxWidth?: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'large';
 }
 
-/**
- * 通用模态框组件
- * 支持自定义标题、内容、按钮
- * 使用Portal渲染到document.body，避免被父元素遮挡
- */
-const Modal: React.FC<ModalProps> = ({
-  isOpen,
-  title,
-  onClose,
-  children,
-  actions = [],
-  maxWidth = 'max-w-md',
+const Modal: React.FC<ModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  title, 
+  children, 
+  size = 'md' 
 }) => {
-  if (!isOpen) return null;
+  const [isVisible, setIsVisible] = useState(false);
 
-  const variantClasses = {
-    primary: 'px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700',
-    secondary: 'px-4 py-2 bg-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-400',
-    danger: 'px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700',
+  useEffect(() => {
+    if (isOpen) {
+      setIsVisible(true);
+      document.body.style.overflow = 'hidden';
+    } else {
+      setTimeout(() => setIsVisible(false), 300);
+      document.body.style.overflow = 'unset';
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+  if (!isVisible) return null;
+
+  const sizeClasses = {
+    sm: 'max-w-md',
+    md: 'max-w-lg',
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl',
+    large: 'max-w-4xl'
   };
 
-  const modalContent = (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[999] flex items-center justify-center">
-      <div className={`bg-white rounded-lg shadow-xl p-6 ${maxWidth} w-full mx-4`}>
-        {/* 标题 */}
-        <h3 className="text-xl font-bold text-gray-900 mb-4">{title}</h3>
-
-        {/* 内容 */}
-        <div className="mb-6">{children}</div>
-
-        {/* 操作按钮 */}
-        {actions.length > 0 && (
-          <div className="flex gap-3">
-            {actions.map((action, index) => (
-              <button
-                key={index}
-                onClick={action.onClick}
-                disabled={action.disabled || false}
-                className={`flex-1 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed ${
-                  variantClasses[action.variant || 'primary']
-                }`}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        )}
+  return (
+    <div 
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-300 ${
+        isOpen ? 'opacity-100' : 'opacity-0'
+      }`}
+      onClick={onClose}
+    >
+      {/* 背景遮罩 - 仅使用模糊效果，无黑色背景 */}
+      <div className="absolute inset-0 backdrop-blur-sm" />
+      
+      {/* 模态框内容 - 白色背景，更大的尺寸 */}
+      <div 
+        className={`relative bg-white rounded-xl shadow-2xl transform transition-all duration-300 ${
+          isOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'
+        } ${sizeClasses[size]} max-h-[90vh] overflow-hidden`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 头部 - 更大的标题区域 */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
+          <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        {/* 内容区域 - 可滚动 */}
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+          {children}
+        </div>
       </div>
     </div>
   );
-
-  return typeof document !== 'undefined'
-    ? createPortal(modalContent, document.body)
-    : null;
 };
 
 export default Modal;
