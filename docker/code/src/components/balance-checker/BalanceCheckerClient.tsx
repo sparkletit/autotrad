@@ -456,17 +456,6 @@ export default function BalanceCheckerClient() {
 
               {balances.length > 0 && (
                 <div className="space-y-4">
-                  <div className="p-4 bg-gray-50 border border-gray-300 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs text-gray-600">查询的地址</p>
-                      {currentRecordLabel && (
-                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
-                          标签: {currentRecordLabel}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-mono text-gray-900 break-all">{queriedAddress}</p>
-                  </div>
 
                   {/* 保存记录和清空记录按钮 */}
                   <div className="flex gap-3">
@@ -549,11 +538,7 @@ export default function BalanceCheckerClient() {
                 </div>
               )}
 
-              {!loading && balances.length === 0 && !error && (
-                <div className="p-6 bg-gray-50 border border-gray-300 rounded-lg text-center">
-                  <p className="text-gray-600">输入地址并点击"查询余额"来查看代币余额</p>
-                </div>
-              )}
+
             </div>
           </div>
         </div>
