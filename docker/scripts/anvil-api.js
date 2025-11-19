@@ -2,7 +2,7 @@
 
 const http = require('http');
 const { spawn } = require('child_process');
-const { readFile, mkdir } = require('fs/promises');
+const { readFile, mkdir, rm } = require('fs/promises');
 const { join } = require('path');
 const { existsSync } = require('fs');
 
@@ -248,6 +248,10 @@ async function stopAnvil() {
     anvilProcess = null;
     currentConfig = null;
     console.log('Anvil 已停止');
+    try {
+      await rm(join(LOG_DIR, 'anvil-api-run.log'), { force: true });
+      console.log('已删除日志文件 /app/logs/anvil-api-run.log');
+    } catch {}
   }
 }
 
