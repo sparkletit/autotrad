@@ -24,7 +24,7 @@ let SUPPORTED_CHAINS: Record<string, NetworkChain> = {
   bsc: {
     name: 'BSC',
     id: 56,
-    rpcUrl: 'https://bnb-mainnet.g.alchemy.com/v2/otntqecKVNu7AW5kP9Z370M8TsQ_cmsb', // 自定义BSC RPC
+    rpcUrl: 'https://rpc.ankr.com/bsc/82c596812c311f4cc184598a378663a680bb171972733faef7b8ab81fc9cc626', // 自定义BSC RPC
   },
   polygon: {
     name: 'Polygon',

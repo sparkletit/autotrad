@@ -59,6 +59,7 @@ export default function ImportTokensListClient() {
   const [filteredTokens, setFilteredTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTokens, setSelectedTokens] = useState<Set<number>>(new Set());
+  const [highlightedRowId, setHighlightedRowId] = useState<number | null>(null);
   const [editingNotes, setEditingNotes] = useState<{[key: number]: string}>({});
   const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [notesModal, setNotesModal] = useState<{ isOpen: boolean; tokenId: number; notes: string }>({ 
@@ -188,8 +189,19 @@ export default function ImportTokensListClient() {
     }
 
     setFilteredTokens(filtered);
-    setCurrentPage(1); // 重置到第一页
   }, [tokens, filters]);
+
+  // 保持当前页有效，不因数据刷新而重置到第一页
+  useEffect(() => {
+    const total = Math.ceil(filteredTokens.length / itemsPerPage);
+    if (total === 0) {
+      if (currentPage !== 1) setCurrentPage(1);
+      return;
+    }
+    if (currentPage > total) {
+      setCurrentPage(total);
+    }
+  }, [filteredTokens, itemsPerPage]);
 
   // 分页功能
   useEffect(() => {
@@ -198,8 +210,8 @@ export default function ImportTokensListClient() {
     setPaginatedTokens(filteredTokens.slice(startIndex, endIndex));
   }, [filteredTokens, currentPage, itemsPerPage]);
 
-  // 更新代币信息
-  const updateToken = async (id: number, updates: Partial<Token>) => {
+  // 更新代币信息（支持静默模式，避免批量操作时频繁弹窗）
+  const updateToken = async (id: number, updates: Partial<Token>, opts?: { silent?: boolean }) => {
     try {
       console.log('准备更新代币:', { id, updates });
       
@@ -215,18 +227,25 @@ export default function ImportTokensListClient() {
       console.log('更新响应:', { response, data });
       
       if (response.ok) {
-        setTokens(tokens.map(token => 
+        // 使用函数式更新，避免并发批量更新导致的状态丢失
+        setTokens(prev => prev.map(token => 
           token.id === id ? { ...token, ...updates } : token
         ));
-        setAutoCloseAlert('success', '更新成功');
+        if (!opts?.silent) {
+          setAutoCloseAlert('success', '更新成功');
+        }
         console.log('更新成功，本地状态已更新');
       } else {
         console.error('更新失败:', data);
-        setAutoCloseAlert('error', data.error || '更新失败');
+        if (!opts?.silent) {
+          setAutoCloseAlert('error', data.error || '更新失败');
+        }
       }
     } catch (error) {
       console.error('网络错误:', error);
-      setAutoCloseAlert('error', '网络错误，请重试');
+      if (!opts?.silent) {
+        setAutoCloseAlert('error', '网络错误，请重试');
+      }
     }
   };
 
@@ -317,6 +336,50 @@ export default function ImportTokensListClient() {
               if (matchingTokenBalance) {
                 setTokens(prev => prev.map(t => t.id === token.id ? { ...t, balance: matchingTokenBalance.balanceEth } : t));
               }
+            }
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch {
+          failCount++;
+        }
+      }));
+      await runBatch();
+    };
+    await runBatch();
+    setAutoCloseAlert('success', `批量查询完成：成功 ${successCount} 个，失败 ${failCount} 个`);
+  };
+
+  const batchQueryPools = async () => {
+    if (selectedTokens.size === 0) {
+      setAlert({ type: 'info', message: '请先选择要查询交易池的代币' });
+      return;
+    }
+    setAutoCloseAlert('info', '正在批量查询交易池...');
+    const targets = tokens.filter(t => selectedTokens.has(t.id));
+    const concurrency = 3;
+    let index = 0;
+    let successCount = 0;
+    let failCount = 0;
+    const runBatch = async () => {
+      if (index >= targets.length) return;
+      const slice = targets.slice(index, index + concurrency);
+      index += concurrency;
+      await Promise.allSettled(slice.map(async (token) => {
+        try {
+          const response = await fetch(`/api/import-tokens/${token.id}/pools?refresh=true`);
+          const data = await response.json();
+          if (response.ok && data.success) {
+            const summary = data.data.summary || null;
+            const poolCountNum = typeof summary?.totalPools === 'number' ? summary.totalPools : Number(summary?.totalPools || 0);
+            const prevCountNum = (() => { const n = Number(token.pool || 0); return Number.isFinite(n) ? n : 0; })();
+            const nextCountNum = Math.max(prevCountNum, poolCountNum);
+            const nextCountStr = String(nextCountNum);
+            setTokens(prev => prev.map(t => t.id === token.id ? { ...t, pool: nextCountStr } : t));
+            // 仅当新值有效且不小于已有值时才写回服务端，避免将 0 回写覆盖历史值
+            if (poolCountNum > 0 && poolCountNum >= prevCountNum) {
+              updateToken(token.id, { pool: String(poolCountNum) }, { silent: true });
             }
             successCount++;
           } else {
@@ -622,7 +685,7 @@ export default function ImportTokensListClient() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header title="代币地址管理" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-white shadow-lg rounded-lg p-8">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -639,7 +702,7 @@ export default function ImportTokensListClient() {
       {/* Header */}
       <Header title="代币地址管理" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* 过滤栏 */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
           <div className="p-4">
@@ -651,7 +714,7 @@ export default function ImportTokensListClient() {
                   type="text"
                   placeholder="输入地址关键词"
                   value={filters.address}
-                  onChange={(e) => setFilters({ ...filters, address: e.target.value })}
+                  onChange={(e) => { setFilters({ ...filters, address: e.target.value }); setCurrentPage(1); }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                 />
               </div>
@@ -659,7 +722,7 @@ export default function ImportTokensListClient() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">区块链</label>
                 <select
                   value={filters.chain}
-                  onChange={(e) => setFilters({ ...filters, chain: e.target.value })}
+                  onChange={(e) => { setFilters({ ...filters, chain: e.target.value }); setCurrentPage(1); }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                 >
                   <option value="">全部</option>
@@ -672,7 +735,7 @@ export default function ImportTokensListClient() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">颜色</label>
                 <select
                   value={filters.color}
-                  onChange={(e) => setFilters({ ...filters, color: e.target.value })}
+                  onChange={(e) => { setFilters({ ...filters, color: e.target.value }); setCurrentPage(1); }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                 >
                   {COLOR_OPTIONS.map((color) => (
@@ -686,7 +749,7 @@ export default function ImportTokensListClient() {
                   type="text"
                   placeholder="输入备注关键词"
                   value={filters.notes}
-                  onChange={(e) => setFilters({ ...filters, notes: e.target.value })}
+                  onChange={(e) => { setFilters({ ...filters, notes: e.target.value }); setCurrentPage(1); }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                 />
               </div>
@@ -716,7 +779,13 @@ export default function ImportTokensListClient() {
                   批量查询余额
                 </button>
                 <button
-                  onClick={() => setFilters({ address: '', color: '', notes: '', chain: '' })}
+                  onClick={batchQueryPools}
+                  className="px-3 py-1 text-sm text-indigo-600 hover:text-white border border-indigo-600 rounded-md hover:bg-indigo-600 transition-colors"
+                >
+                  批量查询交易池
+                </button>
+                <button
+                  onClick={() => { setFilters({ address: '', color: '', notes: '', chain: '' }); setCurrentPage(1); }}
                   className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   清除筛选
@@ -815,7 +884,11 @@ export default function ImportTokensListClient() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {paginatedTokens.map((token, index) => (
-                      <tr key={token.id} className={getRowColorClass(token.color)}>
+                      <tr
+                        key={token.id}
+                        className={`${getRowColorClass(token.color)} ${highlightedRowId === token.id ? 'bg-[#d2b48c] hover:bg-[#d2b48c]' : ''}`}
+                        onClick={() => setHighlightedRowId(token.id)}
+                      >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <input
                             type="checkbox"
@@ -1185,9 +1258,6 @@ export default function ImportTokensListClient() {
                       <div>
                         <div className="text-gray-600">{pool.token0Symbol} 储备</div>
                         <div className="font-mono text-gray-900">
-                          <div className="text-gray-900">
-                            {Number(pool.reserve0).toLocaleString()}
-                          </div>
                           <div className="text-green-600">
                             {(() => {
                               try {
@@ -1202,14 +1272,16 @@ export default function ImportTokensListClient() {
                               }
                             })()}
                           </div>
+
+                          <div className="text-gray-900">
+                            {Number(pool.reserve0).toLocaleString()}
+                          </div>
+
                         </div>
                       </div>
                       <div>
                         <div className="text-gray-600">{pool.token1Symbol} 储备</div>
                         <div className="font-mono text-gray-900">
-                          <div className="text-gray-900">
-                            {Number(pool.reserve1).toLocaleString()}
-                          </div>
                           <div className="text-green-600">
                             {(() => {
                               try {
@@ -1224,6 +1296,10 @@ export default function ImportTokensListClient() {
                               }
                             })()}
                           </div>
+                          <div className="text-gray-900">
+                            {Number(pool.reserve1).toLocaleString()}
+                          </div>
+
                         </div>
                       </div>
                     </div>

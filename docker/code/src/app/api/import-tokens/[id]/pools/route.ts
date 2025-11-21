@@ -38,6 +38,32 @@ const DEX_FACTORIES = {
   },
 };
 
+// 额外 DEX Factory 列表（覆盖更多 DEX）
+const DEX_FACTORY_LIST: Record<string, Array<{ name: string; address: string; chain: any }>> = {
+  bsc: [
+    { name: 'PancakeSwap V2', address: '0xca143ce32fe78f1f7019d7d551a6402fc5350c73', chain: bsc },
+    { name: 'BakerySwap', address: '0x01bF7C66c6BD861915CdaaE475042d3b4f775595', chain: bsc },
+    { name: 'ApeSwap', address: '0x0841BD0B734E4F5853f0dD8d7Ea041c241fb0Da6', chain: bsc },
+    { name: 'Biswap', address: '0x858E3312ed3A876341EA81A4aC0C2d2FCbd07a82', chain: bsc },
+  ],
+  ethereum: [
+    { name: 'Uniswap V2', address: '0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f', chain: mainnet },
+    { name: 'SushiSwap', address: '0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac', chain: mainnet },
+    { name: 'ShibaSwap', address: '0x115934131916c8b277f010928e7b147fac2c77b8', chain: mainnet },
+  ],
+  polygon: [
+    { name: 'QuickSwap', address: '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32', chain: polygon },
+    { name: 'SushiSwap', address: '0xc35DADB65012eC5796536Bd9864ED8773aBc74C4', chain: polygon },
+    { name: 'ApeSwap', address: '0xCf083Be4164828f00cAEbE3e17cBf474522a9eD9', chain: polygon },
+  ],
+  arbitrum: [
+    { name: 'SushiSwap', address: '0xc35DADB65012eC5796536Bd9864ED8773aBc74C4', chain: arbitrum },
+  ],
+  optimism: [
+    { name: 'Velodrome', address: '0x25cbddb98b35ab1ff77413456b31ec81a6ad6eeb', chain: optimism },
+  ],
+};
+
 // Stablecoin addresses for price calculation
 const STABLECOINS = {
   bsc: '0x55d398326f99059ff775485246999027b3197955', // USDT
@@ -47,6 +73,32 @@ const STABLECOINS = {
   optimism: '0x94b008aa00579c1307b0ef2c499ad98a8ce58e58', // USDT
 };
 
+// Multiple stablecoins per chain (to发现更多交易池)
+const STABLECOIN_LIST: Record<string, string[]> = {
+  bsc: [
+    '0x55d398326f99059ff775485246999027b3197955', // USDT
+    '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', // USDC
+    '0xe9e7cea3dedca5984780bafc599bd69add087d56', // BUSD (legacy)
+    '0x1AF3F329e8BE154074D8769B97B1E2E8d2c9Bf05', // DAI (BSC)
+  ],
+  ethereum: [
+    '0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT
+    '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC
+  ],
+  polygon: [
+    '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', // USDT
+    '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // USDC
+  ],
+  arbitrum: [
+    '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9', // USDT
+    '0xff970a61a04b1ca14834a43f5de4533ebddb5cc8', // USDC.e
+  ],
+  optimism: [
+    '0x94b008aa00579c1307b0ef2c499ad98a8ce58e58', // USDT
+    '0x7F5c764cbc14f9669B88837ca1490cCa17c31607', // USDC
+  ],
+};
+
 // WETH/WBNB addresses for additional pair analysis
 const WRAPPED_NATIVE_TOKENS = {
   bsc: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', // WBNB
@@ -54,6 +106,30 @@ const WRAPPED_NATIVE_TOKENS = {
   polygon: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270', // WMATIC
   arbitrum: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', // WETH
   optimism: '0x4200000000000000000000000000000000000006', // WETH
+};
+
+// 常见主流代币（用于更广的候选枚举）
+const COMMON_TOKENS_LIST: Record<string, string[]> = {
+  bsc: [
+    '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', // WBNB
+    '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82', // CAKE
+    '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', // BTCB
+    '0x2170Ed0880ac9A755fd29B2688956BD959F933F8', // ETH (Binance-Peg)
+  ],
+  ethereum: [
+    '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH
+    '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606EB48', // USDC
+    '0x6B175474E89094C44Da98b954EedeAC495271d0F', // DAI
+  ],
+  polygon: [
+    '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270', // WMATIC
+  ],
+  arbitrum: [
+    '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', // WETH
+  ],
+  optimism: [
+    '0x4200000000000000000000000000000000000006', // WETH
+  ],
 };
 
 // Factory ABI
@@ -123,6 +199,16 @@ interface TokenInfo {
   id: number;
   chain: string;
   address: string;
+}
+
+function normalizeChainKey(key: string): keyof typeof DEX_FACTORIES | keyof typeof STABLECOINS | keyof typeof WRAPPED_NATIVE_TOKENS | keyof typeof STABLECOIN_LIST {
+  const k = key.toLowerCase();
+  if (k === 'eth' || k === 'ethereum') return 'ethereum';
+  if (k === 'bsc' || k === 'bnb' || k === 'bsc-mainnet') return 'bsc';
+  if (k === 'matic' || k === 'polygon') return 'polygon';
+  if (k === 'arb' || k === 'arbitrum') return 'arbitrum';
+  if (k === 'op' || k === 'optimism') return 'optimism';
+  return k as any;
 }
 
 interface PoolInfo {
@@ -234,7 +320,7 @@ export async function GET(
     const pools: PoolInfo[] = [];
     
     // 只分析代币所在链的交易池
-    const tokenChain = token.chain.toLowerCase();
+    const tokenChain = normalizeChainKey(token.chain);
     const dexInfo = DEX_FACTORIES[tokenChain as keyof typeof DEX_FACTORIES];
     
     if (dexInfo) {
@@ -341,6 +427,7 @@ async function analyzePoolsForChain(
       }),
     });
 
+    chainKey = normalizeChainKey(chainKey) as string;
     const stablecoinAddress = STABLECOINS[chainKey as keyof typeof STABLECOINS];
     const wrappedNativeAddress = WRAPPED_NATIVE_TOKENS[chainKey as keyof typeof WRAPPED_NATIVE_TOKENS];
     
@@ -349,261 +436,205 @@ async function analyzePoolsForChain(
       return pools;
     }
 
-    // 获取与稳定币的交易对
-    const factoryAddr = getAddress(dexInfo.address);
+    // 获取与多稳定币/原生代币的交易对（尽可能多地发现池）
     const tokenAddr = getAddress(tokenAddress);
-    
-    // 先检查稳定币交易对
-    let pairAddress: string | null = null;
-    let pairTokenAddress: string | null = null;
-    let pairType: 'stablecoin' | 'wrapped' | null = null;
-    
-    if (stablecoinAddress) {
-      const stableAddr = getAddress(stablecoinAddress);
-      console.log(`[pools] 查询 ${chainKey} 链 ${dexInfo.name}: ${tokenAddr} ↔ ${stableAddr} (稳定币)`);
+    const zeroAddress = '0x0000000000000000000000000000000000000000';
+    const stableList = STABLECOIN_LIST[chainKey] || (stablecoinAddress ? [stablecoinAddress] : []);
+    const candidates: Array<{ type: 'stablecoin' | 'wrapped' | 'common'; addr: string }> = [
+      ...stableList.map(a => ({ type: 'stablecoin' as const, addr: getAddress(a) })),
+      ...(wrappedNativeAddress ? [{ type: 'wrapped' as const, addr: getAddress(wrappedNativeAddress) }] : []),
+      ...((COMMON_TOKENS_LIST[chainKey] || []).map(a => ({ type: 'common' as const, addr: getAddress(a) })))
+    ];
+    // 补充：如果 imported_tokens 表中的链为 'eth'，但 DEX_FACTORIES 走 'ethereum'，已在 normalizeChainKey 统一
+    // 再补充：当 token 是稳定币本身时，排除 cand.addr 与 tokenAddr 相同导致价格计算为1的情况
+    const tokenIsStable = stableList.some(a => getAddress(a).toLowerCase() === tokenAddr.toLowerCase());
+    const filteredCandidates = candidates;
+    const seenPairs = new Set<string>();
 
+    const factories = DEX_FACTORY_LIST[chainKey] || (dexInfo ? [dexInfo] : []);
+    for (const factory of factories) {
+      const factoryAddr = getAddress(factory.address);
+      for (const cand of filteredCandidates) {
+      let pairAddress: string | null = null;
       try {
-        const pairPromise = publicClient.readContract({
-          address: factoryAddr as Hex,
-          abi: FACTORY_ABI,
-          functionName: 'getPair',
-          args: [tokenAddr as Hex, stableAddr as Hex],
-        }) as Promise<string>;
-        
-        // 5秒超时
+        const pairPromise = publicClient.readContract({ address: factoryAddr as Hex, abi: FACTORY_ABI, functionName: 'getPair', args: [tokenAddr as Hex, cand.addr as Hex] }) as Promise<string>;
         pairAddress = await Promise.race([
           pairPromise,
-          new Promise<string>((_, reject) => 
-            setTimeout(() => reject(new Error('Factory 查询超时')), 5000)
-          )
+          new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Factory 查询超时')), 5000))
         ]);
-        
-        const zeroAddress = '0x0000000000000000000000000000000000000000';
-        if (pairAddress && pairAddress.toLowerCase() !== zeroAddress) {
-          pairTokenAddress = stableAddr;
-          pairType = 'stablecoin';
-          console.log(`[pools] 找到稳定币交易对: ${pairAddress}`);
-        } else {
-          console.log(`[pools] 未找到稳定币交易对，地址: ${pairAddress}`);
-        }
-      } catch (error) {
-        console.warn(`[pools] ${chainKey} 链稳定币交易对查询失败:`, error);
+      } catch {
+        continue;
       }
-    }
-    
-    // 如果没有稳定币交易对，检查原生代币交易对
-    if (!pairAddress || pairAddress.toLowerCase() === '0x0000000000000000000000000000000000000000') {
-      const wrappedAddr = getAddress(wrappedNativeAddress);
-      console.log(`[pools] 查询 ${chainKey} 链 ${dexInfo.name}: ${tokenAddr} ↔ ${wrappedAddr} (原生代币)`);
+      if (!pairAddress || pairAddress.toLowerCase() === zeroAddress) continue;
+      const key = pairAddress.toLowerCase();
+      if (seenPairs.has(key)) continue;
+      seenPairs.add(key);
 
+      // 验证合约存在（非强制）：若查询失败不拦截，交由后续读方法兜底
+      let codeStr: Hex | null = null;
       try {
-        const pairPromise = publicClient.readContract({
-          address: factoryAddr as Hex,
-          abi: FACTORY_ABI,
-          functionName: 'getPair',
-          args: [tokenAddr as Hex, wrappedAddr as Hex],
-        }) as Promise<string>;
-        
-        // 5秒超时
-        pairAddress = await Promise.race([
-          pairPromise,
-          new Promise<string>((_, reject) => 
-            setTimeout(() => reject(new Error('Factory 查询超时')), 5000)
-          )
+        const codePromise = publicClient.getCode({ address: pairAddress as Hex }) as Promise<Hex | null>;
+        codeStr = await Promise.race([
+          codePromise,
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Code 查询超时')), 8000))
         ]);
-        
-        const zeroAddress = '0x0000000000000000000000000000000000000000';
-        if (pairAddress && pairAddress.toLowerCase() !== zeroAddress) {
-          pairTokenAddress = wrappedAddr;
-          pairType = 'wrapped';
-          console.log(`[pools] 找到原生代币交易对: ${pairAddress}`);
-        } else {
-          console.log(`[pools] 未找到原生代币交易对，地址: ${pairAddress}`);
-        }
-      } catch (error) {
-        console.error(`[pools] ${chainKey} 链原生代币交易对查询失败:`, error);
-        return pools;
-      }
-    }
-    
-    if (!pairAddress) {
-      console.log(`[pools] ${chainKey} 链未找到交易对`);
-      return pools;
-    }
-    
-    console.log(`[pools] 找到交易对地址: ${pairAddress} (类型: ${pairType})`);
+      } catch {}
+      // 若读取代码失败或返回空，也继续尝试读取 token0/token1/reserves
 
-    // 验证合约代码存在 - 添加超时保护
-    let codeStr: string;
-    try {
-      const codePromise = publicClient.getCode({ address: pairAddress as Hex }) as Promise<Hex | null>;
-      const codeResult = await Promise.race<Hex | null>([
-        codePromise,
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Code 查询超时')), 5000))
-      ]);
-      codeStr = codeResult ?? '0x';
-    } catch (error) {
-      console.error(`[pools] ${chainKey} 链 Code 查询失败:`, error);
-      return pools;
-    }
+      // 读取pair信息
+      let token0: string, token1: string, reserves: readonly [bigint, bigint, number];
+      try {
+        const [token0Promise, token1Promise, reservesPromise] = [
+          publicClient.readContract({ address: pairAddress as Hex, abi: PAIR_ABI, functionName: 'token0' }) as Promise<string>,
+          publicClient.readContract({ address: pairAddress as Hex, abi: PAIR_ABI, functionName: 'token1' }) as Promise<string>,
+          publicClient.readContract({ address: pairAddress as Hex, abi: PAIR_ABI, functionName: 'getReserves' }) as Promise<readonly [bigint, bigint, number]>,
+        ];
+        const tupleP = Promise.all([
+          token0Promise,
+          token1Promise,
+          reservesPromise
+        ] as const);
+        [token0, token1, reserves] = await Promise.race([
+          tupleP,
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Pair 信息查询超时')), 12000))
+        ]);
+      } catch { continue; }
 
-    if (!codeStr || codeStr === '0x') {
-      console.log(`[pools] ${chainKey} 链交易对合约不存在`);
-      return pools;
-    }
+      const [reserve0, reserve1, blockTimestamp] = reserves;
+      let token0Symbol = 'TOKEN0', token1Symbol = 'TOKEN1';
+      let token0Decimals = 18, token1Decimals = 18;
+      try {
+        const [symbol0, symbol1, decimals0, decimals1] = await Promise.all([
+          getTokenInfo(publicClient, token0 as string).then(info => info.symbol).catch(() => 'TOKEN0'),
+          getTokenInfo(publicClient, token1 as string).then(info => info.symbol).catch(() => 'TOKEN1'),
+          getTokenInfo(publicClient, token0 as string).then(info => info.decimals).catch(() => 18),
+          getTokenInfo(publicClient, token1 as string).then(info => info.decimals).catch(() => 18),
+        ]);
+        token0Symbol = symbol0;
+        token1Symbol = symbol1;
+        token0Decimals = decimals0;
+        token1Decimals = decimals1;
+      } catch {}
 
-    // 获取交易对信息 - 添加超时保护
-    let token0: string, token1: string, reserves: any;
-    try {
-      const [token0Promise, token1Promise, reservesPromise] = [
-        publicClient.readContract({
-          address: pairAddress as Hex,
-          abi: PAIR_ABI,
-          functionName: 'token0',
-        }),
-        publicClient.readContract({
-          address: pairAddress as Hex,
-          abi: PAIR_ABI,
-          functionName: 'token1',
-        }),
-        publicClient.readContract({
-          address: pairAddress as Hex,
-          abi: PAIR_ABI,
-          functionName: 'getReserves',
-        }),
-      ];
-
-      [token0, token1, reserves] = await Promise.race<[string, string, any]>([
-        Promise.all([
-          token0Promise as Promise<string>,
-          token1Promise as Promise<string>,
-          reservesPromise as Promise<any>
-        ]),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Pair 信息查询超时')), 8000))
-      ]);
-    } catch (error) {
-      console.error(`[pools] ${chainKey} 链 Pair 信息查询失败:`, error);
-      return pools;
-    }
-
-    const [reserve0, reserve1, blockTimestamp] = reserves as [bigint, bigint, number];
-
-    // 获取代币符号和精度 - 添加错误处理
-    let token0Symbol = 'TOKEN0', token1Symbol = 'TOKEN1';
-    let token0Decimals = 18, token1Decimals = 18;
-    
-    try {
-      const [symbol0, symbol1, decimals0, decimals1] = await Promise.all([
-        getTokenInfo(publicClient, token0 as string).then(info => info.symbol).catch(() => 'TOKEN0'),
-        getTokenInfo(publicClient, token1 as string).then(info => info.symbol).catch(() => 'TOKEN1'),
-        getTokenInfo(publicClient, token0 as string).then(info => info.decimals).catch(() => 18),
-        getTokenInfo(publicClient, token1 as string).then(info => info.decimals).catch(() => 18),
-      ]);
-      
-      token0Symbol = symbol0;
-      token1Symbol = symbol1;
-      token0Decimals = decimals0;
-      token1Decimals = decimals1;
-    } catch (error) {
-      console.warn(`[pools] ${chainKey} 链获取代币信息失败:`, error);
-    }
-
-    // 计算 USDT 价格
-    let usdtPrice = 0;
-    try {
-      if (pairType === 'stablecoin' && pairTokenAddress) {
-        const pairTokLower = pairTokenAddress.toLowerCase();
-        // 稳定币交易对 - 直接计算价格
-        if (token0.toLowerCase() === pairTokLower) {
-          // token1 是我们分析的代币，token0 是稳定币
-          const token1Amount = parseFloat(formatUnits(reserve1, token1Decimals));
-          const token0Amount = parseFloat(formatUnits(reserve0, token0Decimals));
-          usdtPrice = token0Amount > 0 ? token1Amount / token0Amount : 0;
-        } else if (token1.toLowerCase() === pairTokLower) {
-          // token0 是我们分析的代币，token1 是稳定币
-          const token0Amount = parseFloat(formatUnits(reserve0, token0Decimals));
-          const token1Amount = parseFloat(formatUnits(reserve1, token1Decimals));
-          usdtPrice = token1Amount > 0 ? token0Amount / token1Amount : 0;
-        }
-      } else if (pairType === 'wrapped' && pairTokenAddress && stablecoinAddress) {
-        // 原生代币交易对 - 需要获取原生代币对稳定币的价格
-        try {
-          // 获取原生代币对稳定币的价格（例如 WBNB/USDT）
-          const nativeStablePairPromise = publicClient.readContract({
-            address: factoryAddr as Hex,
-            abi: FACTORY_ABI,
-            functionName: 'getPair',
-            args: [pairTokenAddress as Hex, stablecoinAddress as Hex],
-          }) as Promise<string>;
-          
-          const nativeStablePair = await Promise.race([
-            nativeStablePairPromise,
-            new Promise<string>((_, reject) => 
-              setTimeout(() => reject(new Error('原生代币-稳定币交易对查询超时')), 5000)
-            )
-          ]);
-          
-          const zeroAddress = '0x0000000000000000000000000000000000000000';
-          if (nativeStablePair && nativeStablePair.toLowerCase() !== zeroAddress) {
-            // 获取原生代币对稳定币的储备
-            const [nativeToken0, nativeToken1, nativeReserves] = await Promise.all<[
-              string,
-              string,
-              any
-            ]>([
-              publicClient.readContract({ address: nativeStablePair as Hex, abi: PAIR_ABI, functionName: 'token0' }) as Promise<string>,
-              publicClient.readContract({ address: nativeStablePair as Hex, abi: PAIR_ABI, functionName: 'token1' }) as Promise<string>,
-              publicClient.readContract({ address: nativeStablePair as Hex, abi: PAIR_ABI, functionName: 'getReserves' }) as Promise<any>,
-            ]);
-            
-            const [nativeReserve0, nativeReserve1] = nativeReserves as [bigint, bigint, number];
-            
-            // 计算原生代币对稳定币的价格
-            let nativeToStablePrice = 0;
-            if (nativeToken0.toLowerCase() === stablecoinAddress.toLowerCase()) {
-              nativeToStablePrice = parseFloat(formatUnits(nativeReserve0, 18)) / parseFloat(formatUnits(nativeReserve1, 18));
-            } else if (nativeToken1.toLowerCase() === stablecoinAddress.toLowerCase()) {
-              nativeToStablePrice = parseFloat(formatUnits(nativeReserve1, 18)) / parseFloat(formatUnits(nativeReserve0, 18));
-            }
-            
-            // 计算代币对稳定币的价格
-            const pairTokLower = pairTokenAddress.toLowerCase();
-            if (token0.toLowerCase() === pairTokLower) {
-              const token1Amount = parseFloat(formatUnits(reserve1, token1Decimals));
-              const nativeAmount = parseFloat(formatUnits(reserve0, token0Decimals));
-              usdtPrice = nativeAmount > 0 ? (token1Amount / nativeAmount) * nativeToStablePrice : 0;
-            } else if (token1.toLowerCase() === pairTokLower) {
-              const token0Amount = parseFloat(formatUnits(reserve0, token0Decimals));
-              const nativeAmount = parseFloat(formatUnits(reserve1, token1Decimals));
-              usdtPrice = nativeAmount > 0 ? (token0Amount / nativeAmount) * nativeToStablePrice : 0;
-            }
+      // 价格计算（稳定币：直接比值；原生包装：通过其与首选稳定币的池折算）
+      let usdtPrice = 0;
+      try {
+        if (cand.type === 'stablecoin') {
+          const pairTokLower = cand.addr.toLowerCase();
+          if (token0.toLowerCase() === pairTokLower) {
+            const token1Amount = parseFloat(formatUnits(reserve1, token1Decimals));
+            const token0Amount = parseFloat(formatUnits(reserve0, token0Decimals));
+            usdtPrice = token0Amount > 0 ? token1Amount / token0Amount : 0;
+          } else if (token1.toLowerCase() === pairTokLower) {
+            const token0Amount = parseFloat(formatUnits(reserve0, token0Decimals));
+            const token1Amount = parseFloat(formatUnits(reserve1, token1Decimals));
+            usdtPrice = token1Amount > 0 ? token0Amount / token1Amount : 0;
           }
-        } catch (priceError) {
-          console.warn(`[pools] 计算原生代币交易对价格失败:`, priceError);
+          // 若 pairTokLower 与 tokenAddr 相同（代币是稳定币本身），此池价格含义不应记为1；保留但不会影响最终排序
+        } else if (cand.type === 'wrapped') {
+          // 选取稳定币列表中储备更充足的作为折算依据（简单优先第一个）
+          const baseStable = stableList[0];
+          if (baseStable) {
+            try {
+              const nativeStablePairPromise = publicClient.readContract({ address: factoryAddr as Hex, abi: FACTORY_ABI, functionName: 'getPair', args: [cand.addr as Hex, getAddress(baseStable) as Hex] }) as Promise<string>;
+              const nativeStablePair = await Promise.race([
+                nativeStablePairPromise,
+                new Promise<string>((_, reject) => setTimeout(() => reject(new Error('原生代币-稳定币交易对查询超时')), 5000))
+              ]);
+              if (nativeStablePair && nativeStablePair.toLowerCase() !== zeroAddress) {
+                const nativeToken0P = publicClient.readContract({ address: nativeStablePair as Hex, abi: PAIR_ABI, functionName: 'token0' }) as Promise<string>;
+                const nativeToken1P = publicClient.readContract({ address: nativeStablePair as Hex, abi: PAIR_ABI, functionName: 'token1' }) as Promise<string>;
+                const nativeReservesP = publicClient.readContract({ address: nativeStablePair as Hex, abi: PAIR_ABI, functionName: 'getReserves' }) as Promise<readonly [bigint, bigint, number]>;
+                const [nativeToken0, nativeToken1, nativeReserves] = await Promise.all([
+                  nativeToken0P,
+                  nativeToken1P,
+                  nativeReservesP,
+                ] as const);
+                const [nativeReserve0, nativeReserve1] = nativeReserves;
+                let nativeToStablePrice = 0;
+                const bs = getAddress(baseStable).toLowerCase();
+                if (nativeToken0.toLowerCase() === bs) {
+                  // token0 是稳定币 → 稳定币储备 / 原生储备 = 稳定币价格/原生
+                  nativeToStablePrice = parseFloat(formatUnits(nativeReserve0, 18)) / parseFloat(formatUnits(nativeReserve1, 18));
+                } else if (nativeToken1.toLowerCase() === bs) {
+                  // token1 是稳定币 → 稳定币储备 / 原生储备
+                  nativeToStablePrice = parseFloat(formatUnits(nativeReserve1, 18)) / parseFloat(formatUnits(nativeReserve0, 18));
+                }
+                const pairTokLower = cand.addr.toLowerCase();
+                if (token0.toLowerCase() === pairTokLower) {
+                  const token1Amount = parseFloat(formatUnits(reserve1, token1Decimals));
+                  const nativeAmount = parseFloat(formatUnits(reserve0, token0Decimals));
+                  usdtPrice = nativeAmount > 0 ? (token1Amount / nativeAmount) * nativeToStablePrice : 0;
+                } else if (token1.toLowerCase() === pairTokLower) {
+                  const token0Amount = parseFloat(formatUnits(reserve0, token0Decimals));
+                  const nativeAmount = parseFloat(formatUnits(reserve1, token1Decimals));
+                  usdtPrice = nativeAmount > 0 ? (token0Amount / nativeAmount) * nativeToStablePrice : 0;
+                }
+              }
+            } catch {}
+          }
+        } else if (cand.type === 'common') {
+          // 通过“候选代币→稳定币”的价格来折算此池的USD价格
+          const baseStable = stableList[0];
+          if (baseStable) {
+            try {
+              const commonStablePairPromise = publicClient.readContract({ address: factoryAddr as Hex, abi: FACTORY_ABI, functionName: 'getPair', args: [cand.addr as Hex, getAddress(baseStable) as Hex] }) as Promise<string>;
+              const commonStablePair = await Promise.race([
+                commonStablePairPromise,
+                new Promise<string>((_, reject) => setTimeout(() => reject(new Error('候选代币-稳定币交易对查询超时')), 5000))
+              ]);
+              if (commonStablePair && commonStablePair.toLowerCase() !== zeroAddress) {
+                const cToken0P = publicClient.readContract({ address: commonStablePair as Hex, abi: PAIR_ABI, functionName: 'token0' }) as Promise<string>;
+                const cToken1P = publicClient.readContract({ address: commonStablePair as Hex, abi: PAIR_ABI, functionName: 'token1' }) as Promise<string>;
+                const cReservesP = publicClient.readContract({ address: commonStablePair as Hex, abi: PAIR_ABI, functionName: 'getReserves' }) as Promise<readonly [bigint, bigint, number]>;
+                const [cToken0, cToken1, cReserves] = await Promise.all([
+                  cToken0P,
+                  cToken1P,
+                  cReservesP,
+                ] as const);
+                const [cReserve0, cReserve1] = cReserves;
+                const bs = getAddress(baseStable).toLowerCase();
+                let commonToStablePrice = 0;
+                if (cToken0.toLowerCase() === bs) {
+                  commonToStablePrice = parseFloat(formatUnits(cReserve0, 18)) / parseFloat(formatUnits(cReserve1, 18));
+                } else if (cToken1.toLowerCase() === bs) {
+                  commonToStablePrice = parseFloat(formatUnits(cReserve1, 18)) / parseFloat(formatUnits(cReserve0, 18));
+                }
+                const pairTokLower = cand.addr.toLowerCase();
+                if (token0.toLowerCase() === pairTokLower) {
+                  const token1Amount = parseFloat(formatUnits(reserve1, token1Decimals));
+                  const commonAmount = parseFloat(formatUnits(reserve0, token0Decimals));
+                  usdtPrice = commonAmount > 0 ? (token1Amount / commonAmount) * commonToStablePrice : 0;
+                } else if (token1.toLowerCase() === pairTokLower) {
+                  const token0Amount = parseFloat(formatUnits(reserve0, token0Decimals));
+                  const commonAmount = parseFloat(formatUnits(reserve1, token1Decimals));
+                  usdtPrice = commonAmount > 0 ? (token0Amount / commonAmount) * commonToStablePrice : 0;
+                }
+              }
+            } catch {}
+          }
         }
+      } catch {}
+
+      pools.push({
+        dex: factory.name,
+        chain: chainKey,
+        pairAddress: key,
+        token0: token0.toLowerCase(),
+        token1: token1.toLowerCase(),
+        reserve0: reserve0.toString(),
+        reserve1: reserve1.toString(),
+        token0Symbol,
+        token1Symbol,
+        token0Decimals,
+        token1Decimals,
+        usdtPrice,
+        blockTimestamp,
+      });
       }
-    } catch (priceError) {
-      console.warn(`[pools] 计算价格失败:`, priceError);
     }
 
-    pools.push({
-      dex: dexInfo.name,
-      chain: chainKey,
-      pairAddress: pairAddress.toLowerCase(),
-      token0: token0.toLowerCase(),
-      token1: token1.toLowerCase(),
-      reserve0: reserve0.toString(),
-      reserve1: reserve1.toString(),
-      token0Symbol,
-      token1Symbol,
-      token0Decimals,
-      token1Decimals,
-      usdtPrice,
-      blockTimestamp,
-    });
-
-    const pairTypeText = pairType === 'stablecoin' ? '稳定币' : '原生代币';
-    console.log(`[pools] 找到 ${chainKey} 链 ${pairTypeText} 交易池: ${token0Symbol}/${token1Symbol}, 价格: $${usdtPrice.toFixed(6)}`);
+    pools.sort((a, b) => b.usdtPrice - a.usdtPrice);
 
   } catch (error) {
     console.error(`[pools] 分析 ${chainKey} 链失败:`, error);
